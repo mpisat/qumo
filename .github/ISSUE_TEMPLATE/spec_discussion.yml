@@ -1,0 +1,80 @@
+name: 📋 Spec Discussion
+description: Discuss protocol specifications or implementation details
+title: "[Spec]: "
+labels: ["spec", "discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to discuss Media over QUIC (MoQ) specifications or implementation details.
+        
+  - type: dropdown
+    id: spec-area
+    attributes:
+      label: Specification Area
+      description: Which area of the spec does this relate to?
+      options:
+        - QUIC Transport
+        - Media Streaming
+        - Relay Protocol
+        - Control Messages
+        - Data Framing
+        - Congestion Control
+        - Error Handling
+        - Security
+        - Other
+    validations:
+      required: true
+      
+  - type: textarea
+    id: topic
+    attributes:
+      label: Discussion Topic
+      description: What aspect of the specification do you want to discuss?
+      placeholder: I'd like to discuss...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: current-spec
+    attributes:
+      label: Current Specification
+      description: What does the current specification say? (Include references if available)
+      placeholder: According to draft-ietf-moq-transport-XX...
+      
+  - type: textarea
+    id: question
+    attributes:
+      label: Question or Concern
+      description: What is unclear or what would you like to propose?
+      placeholder: How should we handle...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Approach
+      description: If you have a proposal, describe it here
+      placeholder: I propose we implement this as...
+      
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact Analysis
+      description: What would be the impact of this change or clarification?
+      
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to relevant specs, drafts, or discussions
+      placeholder: |
+        - https://datatracker.ietf.org/doc/draft-ietf-moq-transport/
+        - Related GitHub issue #123
+        
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information that might be helpful

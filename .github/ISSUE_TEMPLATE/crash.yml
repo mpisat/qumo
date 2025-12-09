@@ -1,0 +1,81 @@
+name: 💥 Crash Report
+description: Report a crash or panic in qumo
+title: "[Crash]: "
+labels: ["crash", "bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this crash! Please provide as much detail as possible.
+        
+  - type: textarea
+    id: description
+    attributes:
+      label: Crash Description
+      description: Describe what happened when the crash occurred.
+      placeholder: The relay server panicked when...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: stacktrace
+    attributes:
+      label: Stack Trace
+      description: Please paste the full stack trace
+      render: shell
+    validations:
+      required: true
+      
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this crash?
+      placeholder: |
+        1. Start relay with config '...'
+        2. Send specific payload '...'
+        3. Crash occurs
+    validations:
+      required: true
+      
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Please paste your configuration file (remove sensitive data)
+      render: yaml
+      
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of qumo crashed?
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+      
+  - type: input
+    id: go-version
+    attributes:
+      label: Go Version
+      description: What version of Go was used to build?
+      placeholder: "go1.21.0"
+      
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: What operating system were you running?
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+      
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other relevant information about the crash.
