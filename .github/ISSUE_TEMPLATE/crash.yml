@@ -1,81 +1,111 @@
-name: 💥 Crash Report
-description: Report a crash or panic in qumo
-title: "[Crash]: "
-labels: ["crash", "bug", "needs-triage"]
+name: "Crash Report"
+description: "Report a crash or panic in qumo"
+title: "[CRASH] "
+labels: ["type:crash", "type:bug", "status:triage"]
+assignees: []
+
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting this crash! Please provide as much detail as possible.
-        
+        Thank you for reporting this crash! Please provide as much detail as possible.
+
   - type: textarea
     id: description
     attributes:
-      label: Crash Description
-      description: Describe what happened when the crash occurred.
-      placeholder: The relay server panicked when...
+      label: "Crash Description"
+      description: "Describe what happened when the crash occurred"
+      placeholder: "The relay server panicked when..."
     validations:
       required: true
-      
+
   - type: textarea
-    id: stacktrace
+    id: stack_trace
     attributes:
-      label: Stack Trace
-      description: Please paste the full stack trace
-      render: shell
+      label: "Stack Trace"
+      description: "Please paste the full stack trace here"
+      render: text
+      placeholder: |
+        [paste stack trace here]
     validations:
       required: true
-      
+
   - type: textarea
     id: steps
     attributes:
-      label: Steps to Reproduce
-      description: How can we reproduce this crash?
+      label: "Steps to Reproduce"
+      description: "Describe the steps to reproduce the crash"
       placeholder: |
         1. Start relay with config '...'
         2. Send specific payload '...'
         3. Crash occurs
     validations:
       required: true
-      
-  - type: textarea
-    id: config
-    attributes:
-      label: Configuration
-      description: Please paste your configuration file (remove sensitive data)
-      render: yaml
-      
+
   - type: input
     id: version
     attributes:
-      label: Version
-      description: What version of qumo crashed?
-      placeholder: "v0.1.0"
+      label: "Version"
+      description: "What version of qumo crashed?"
+      placeholder: "Example) v0.1.0 or commit hash"
     validations:
       required: true
-      
+
   - type: input
-    id: go-version
+    id: go_version
     attributes:
-      label: Go Version
-      description: What version of Go was used to build?
-      placeholder: "go1.21.0"
-      
-  - type: dropdown
-    id: os
-    attributes:
-      label: Operating System
-      description: What operating system were you running?
-      options:
-        - Linux
-        - macOS
-        - Windows
-        - Other
+      label: "Go Version"
+      description: "What version of Go was used to build?"
+      placeholder: "Example) go version go1.21.0"
     validations:
       required: true
-      
+
   - type: textarea
-    id: additional
+    id: environment
     attributes:
-      label: Additional Context
-      description: Any other relevant information about the crash.
+      label: "Environment"
+      description: "Describe your environment (OS, architecture, etc.)"
+      placeholder: |
+        - OS: Windows 11
+        - Architecture: x64
+        - Other relevant details
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: "Configuration"
+      description: "Please paste your configuration file (remove sensitive data)"
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs"
+      description: "If applicable, provide any relevant logs or error messages"
+      render: text
+      placeholder: |
+        [paste logs here]
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: "Additional Context"
+      description: "Add any other context about the problem here, such as what you were trying to do when the crash occurred"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Checklist"
+      options:
+        - label: "I searched for existing issues"
+          required: true
+        - label: "I can reproduce on the main branch"
+          required: false
