@@ -6,7 +6,9 @@ import (
 	"github.com/okdaichi/gomoqt/moqt"
 )
 
-var DefaultFrameCapacity = 1500
+var NewFrameCapacity = DefaultNewFrameCapacity
+
+const DefaultNewFrameCapacity = 1500
 
 var DefaultFramePool = NewFramePool()
 
@@ -18,7 +20,7 @@ func NewFramePool() *FramePool {
 	return &FramePool{
 		pool: sync.Pool{
 			New: func() any {
-				return moqt.NewFrame(DefaultFrameCapacity)
+				return moqt.NewFrame(DefaultNewFrameCapacity)
 			},
 		},
 	}

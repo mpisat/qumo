@@ -7,7 +7,9 @@ import (
 	"github.com/okdaichi/gomoqt/moqt"
 )
 
-var GroupCacheCount = 8
+var GroupCacheSize = DefaultGroupCacheSize
+
+const DefaultGroupCacheSize = 8
 
 type groupCache struct {
 	mu     sync.Mutex // Protects frames slice for defensive programming
@@ -45,8 +47,8 @@ func (gc *groupCache) next(index int) *moqt.Frame {
 
 func newGroupRing() *groupRing {
 	ring := &groupRing{
-		caches: make([]atomic.Pointer[groupCache], GroupCacheCount),
-		size:   GroupCacheCount, // Is this needed?
+		caches: make([]atomic.Pointer[groupCache], GroupCacheSize),
+		size:   GroupCacheSize, // Is this needed?
 	}
 	return ring
 }

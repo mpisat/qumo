@@ -20,8 +20,8 @@ func TestFramePoolGetPut(t *testing.T) {
 	}
 
 	// Verify capacity
-	if frame.Cap() != DefaultFrameCapacity {
-		t.Errorf("Expected capacity %d, got %d", DefaultFrameCapacity, frame.Cap())
+	if frame.Cap() != DefaultNewFrameCapacity {
+		t.Errorf("Expected capacity %d, got %d", DefaultNewFrameCapacity, frame.Cap())
 	}
 
 	// Put frame back
@@ -152,11 +152,11 @@ func TestFramePoolReuse(t *testing.T) {
 // TestFramePoolCapacity tests custom capacity
 func TestFramePoolCapacity(t *testing.T) {
 	// Save original
-	originalCapacity := DefaultFrameCapacity
-	defer func() { DefaultFrameCapacity = originalCapacity }()
+	originalCapacity := NewFrameCapacity
+	defer func() { NewFrameCapacity = originalCapacity }()
 
 	// Create pool with different capacity
-	DefaultFrameCapacity = 3000
+	NewFrameCapacity = 3000
 	pool := NewFramePool()
 
 	frame := pool.Get()
@@ -193,7 +193,7 @@ func BenchmarkFramePoolGetPutConcurrent(b *testing.B) {
 func BenchmarkFramePoolNoReuse(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		frame := moqt.NewFrame(DefaultFrameCapacity)
+		frame := moqt.NewFrame(DefaultNewFrameCapacity)
 		frame.Write([]byte("data"))
 		_ = frame
 	}
@@ -359,7 +359,7 @@ func TestFramePoolMemoryEfficiency(t *testing.T) {
 		frames := make([]*moqt.Frame, 10000)
 		for i := 0; i < 10000; i++ {
 			frames[i] = pool.Get()
-			frames[i].Write(make([]byte, DefaultFrameCapacity))
+			frames[i].Write(make([]byte, DefaultNewFrameCapacity))
 		}
 
 		// Return all
@@ -384,10 +384,10 @@ func TestFramePoolCapacityVariations(t *testing.T) {
 
 	for _, cap := range capacities {
 		t.Run(string(rune('0'+(cap/10000)%10))+string(rune('0'+(cap/1000)%10))+string(rune('0'+(cap/100)%10))+string(rune('0'+(cap/10)%10))+string(rune('0'+cap%10))+"_capacity", func(t *testing.T) {
-			original := DefaultFrameCapacity
-			defer func() { DefaultFrameCapacity = original }()
+			original := NewFrameCapacity
+			defer func() { NewFrameCapacity = original }()
 
-			DefaultFrameCapacity = cap
+			NewFrameCapacity = cap
 			pool := NewFramePool()
 
 			frame := pool.Get()
@@ -643,7 +643,7 @@ func BenchmarkFramePoolVsNaive(b *testing.B) {
 	b.Run("without_pool", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = moqt.NewFrame(DefaultFrameCapacity)
+			_ = moqt.NewFrame(DefaultNewFrameCapacity)
 		}
 	})
 
@@ -662,7 +662,7 @@ func BenchmarkFramePoolVsNaive(b *testing.B) {
 		data := make([]byte, 500)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			frame := moqt.NewFrame(DefaultFrameCapacity)
+			frame := moqt.NewFrame(DefaultNewFrameCapacity)
 			frame.Write(data)
 		}
 	})

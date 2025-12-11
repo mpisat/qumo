@@ -313,19 +313,19 @@ func TestGroupRingEdgeCases(t *testing.T) {
 func TestGroupRingCapacity(t *testing.T) {
 	t.Run("default_capacity", func(t *testing.T) {
 		ring := newGroupRing()
-		if ring.size != GroupCacheCount {
-			t.Errorf("Expected size %d, got %d", GroupCacheCount, ring.size)
+		if ring.size != GroupCacheSize {
+			t.Errorf("Expected size %d, got %d", GroupCacheSize, ring.size)
 		}
-		if len(ring.caches) != GroupCacheCount {
-			t.Errorf("Expected %d cache slots, got %d", GroupCacheCount, len(ring.caches))
+		if len(ring.caches) != GroupCacheSize {
+			t.Errorf("Expected %d cache slots, got %d", GroupCacheSize, len(ring.caches))
 		}
 	})
 
 	t.Run("custom_capacity", func(t *testing.T) {
-		original := GroupCacheCount
-		defer func() { GroupCacheCount = original }()
+		original := GroupCacheSize
+		defer func() { GroupCacheSize = original }()
 
-		GroupCacheCount = 16
+		GroupCacheSize = 16
 		ring := newGroupRing()
 		if ring.size != 16 {
 			t.Errorf("Expected custom size 16, got %d", ring.size)

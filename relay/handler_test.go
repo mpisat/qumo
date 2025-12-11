@@ -599,11 +599,12 @@ func TestDistributorNotificationDelivery(t *testing.T) {
 		}
 
 		const numSubs = 50
-		received := make([]atomic.Int32, numSubs)
+		received := make([]*atomic.Int32, numSubs)
 		var wg sync.WaitGroup
 
 		// Create subscribers that count notifications
-		for i := 0; i < numSubs; i++ {
+		for i := range numSubs {
+			received[i] = &atomic.Int32{}
 			wg.Add(1)
 			idx := i
 			go func() {
