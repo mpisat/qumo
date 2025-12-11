@@ -19,6 +19,7 @@ type config struct {
 	Address  string
 	CertFile string
 	KeyFile  string
+	Upstream string
 	Relay    relay.Config
 }
 
@@ -80,15 +81,14 @@ func main() {
 func loadConfig(filename string) (*config, error) {
 	type yamlConfig struct {
 		Server struct {
-			Address string `yaml:"address"`
-			TLS     struct {
-				CertFile string `yaml:"cert_file"`
-				KeyFile  string `yaml:"key_file"`
-			} `yaml:"tls"`
+			Address  string `yaml:"address"`
+			CertFile string `yaml:"cert_file"`
+			KeyFile  string `yaml:"key_file"`
 		} `yaml:"server"`
 		Relay struct {
-			FrameCapacity  int `yaml:"frame_capacity"`
-			GroupCacheSize int `yaml:"group_cache_size"`
+			Upstream       string `yaml:"upstream"`
+			GroupCacheSize int    `yaml:"group_cache_size"`
+			FrameCapacity  int    `yaml:"frame_capacity"`
 		} `yaml:"relay"`
 	}
 
@@ -106,17 +106,19 @@ func loadConfig(filename string) (*config, error) {
 
 	// Set defaults
 	if ymlConfig.Relay.FrameCapacity == 0 {
-		ymlConfig.Relay.FrameCapacity = relay.DefaultNewFrameCapacity
+		ymlConfig.Relay.FrameCapacity = 1500
 	}
 	if ymlConfig.Relay.GroupCacheSize == 0 {
-		ymlConfig.Relay.GroupCacheSize = relay.DefaultGroupCacheSize
+		ymlConfig.Relay.GroupCacheSize = 100
 	}
 
 	config := &config{
 		Address:  ymlConfig.Server.Address,
-		CertFile: ymlConfig.Server.TLS.CertFile,
-		KeyFile:  ymlConfig.Server.TLS.KeyFile,
+		CertFile: ymlConfig.Server.CertFile,
+		KeyFile:  ymlConfig.Server.KeyFile,
+		Upstream: ymlConfig.Relay.Upstream,
 		Relay: relay.Config{
+			Upstream:       ymlConfig.Relay.Upstream,
 			FrameCapacity:  ymlConfig.Relay.FrameCapacity,
 			GroupCacheSize: ymlConfig.Relay.GroupCacheSize,
 		},

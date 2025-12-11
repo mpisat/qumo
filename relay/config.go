@@ -1,9 +1,12 @@
 package relay
 
 type Config struct {
-	FrameCapacity int
+	// Upstream server URL (optional)
+	Upstream string
 
 	// GroupCacheSize is the maximum number of group caches to keep.
-	// If zero, it means no group caches are kept.
 	GroupCacheSize int
+
+	// FrameCapacity is the frame buffer size in bytes.
+	FrameCapacity int
 }
