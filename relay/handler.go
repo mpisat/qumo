@@ -90,7 +90,7 @@ func (h *RelayHandler) ServeTrack(tw *moqt.TrackWriter) {
 
 func (h *RelayHandler) subscribe(name moqt.TrackName) *trackDistributor {
 	if h.Session == nil {
-		return nil // TODO: return proper error(?)
+		return nil
 	}
 
 	if h.Announcement == nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/okdaichi/gomoqt/moqt"
@@ -66,7 +67,7 @@ func (s *Server) ListenAndServe() error {
 		SetupHandler: moqt.SetupHandlerFunc(func(w moqt.SetupResponseWriter, r *moqt.SetupRequest) {
 			downstream, err := moqt.Accept(w, r, serverMux)
 			if err != nil {
-				// TODO: log error
+				slog.Error("failed to accept connection", "err", err)
 				return
 			}
 
@@ -85,7 +86,7 @@ func (s *Server) ListenAndServe() error {
 			})
 
 			if err != nil {
-				// TODO: log error
+				slog.Error("relay session ended", "err", err)
 				return
 			}
 		}),

@@ -1,0 +1,27 @@
+# Docker configuration for qumo-relay
+# This config is optimized for running in a container
+
+server:
+  # Bind to all interfaces on port 5000
+  address: "0.0.0.0:5000"
+  
+  # TLS certificate configuration
+  cert_file: "certs/server.crt"
+  key_file: "certs/server.key"
+  
+  # Health check endpoint
+  health_check_addr: ":8080"
+
+relay:
+  # Upstream URL (empty for standalone relay)
+  upstream_url: ""
+  
+  # Group cache configuration
+  group_cache_size: 100
+  
+  # Frame capacity
+  frame_capacity: 1500
+
+logging:
+  level: "info"
+  format: "json"
