@@ -9,4 +9,8 @@ type Config struct {
 
 	// FrameCapacity is the frame buffer size in bytes.
 	FrameCapacity int
+
+	// HealthCheckAddr is the address for the health check HTTP server
+	// Example: ":8080" or "0.0.0.0:8080"
+	HealthCheckAddr string
 }

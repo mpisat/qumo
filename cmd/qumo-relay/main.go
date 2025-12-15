@@ -7,20 +7,23 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/okdaichi/qumo/relay"
+	"github.com/okdaichi/qumo/relay/health"
 	"gopkg.in/yaml.v3"
 )
 
 type config struct {
-	Address     string
-	CertFile    string
-	KeyFile     string
-	UpstreamURL string
-	RelayConfig relay.Config
+	Address         string
+	CertFile        string
+	KeyFile         string
+	UpstreamURL     string
+	HealthCheckAddr string
+	RelayConfig     relay.Config
 }
 
 func main() {
@@ -49,11 +52,41 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Create MOQT server with correct API
+	// Create health check handler
+	healthHandler := health.NewStatusHandler()
+
+	// Set upstream required if upstream URL is configured
+	if config.UpstreamURL != "" {
+		healthHandler.SetUpstreamRequired(true)
+	}
+
+	// Create MOQT server
 	server := &relay.Server{
 		Addr:      config.Address,
 		TLSConfig: tlsConfig,
 		Config:    &config.RelayConfig,
+		Health:    healthHandler,
+	}
+
+	// Start health check HTTP server if configured
+	var httpServer *http.Server
+	if config.HealthCheckAddr != "" {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", healthHandler.ServeHTTP)
+		mux.HandleFunc("/health/live", healthHandler.ServeLive)
+		mux.HandleFunc("/health/ready", healthHandler.ServeReady)
+
+		httpServer = &http.Server{
+			Addr:    config.HealthCheckAddr,
+			Handler: mux,
+		}
+
+		go func() {
+			log.Printf("Starting health check server on %s", config.HealthCheckAddr)
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Printf("Health check server error: %v", err)
+			}
+		}()
 	}
 
 	// Start server in a goroutine
@@ -69,8 +102,19 @@ func main() {
 	<-ctx.Done()
 
 	slog.Info("Shutting down server...")
+
 	// Graceful shutdown
-	if err := server.Shutdown(context.Background()); err != nil {
+	shutdownCtx := context.Background()
+
+	// Shutdown health check server
+	if httpServer != nil {
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Error shutting down health check server: %v", err)
+		}
+	}
+
+	// Shutdown MOQT server
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Error during shutdown: %v", err)
 	}
 
@@ -80,9 +124,10 @@ func main() {
 func loadConfig(filename string) (*config, error) {
 	type yamlConfig struct {
 		Server struct {
-			Address  string `yaml:"address"`
-			CertFile string `yaml:"cert_file"`
-			KeyFile  string `yaml:"key_file"`
+			Address         string `yaml:"address"`
+			CertFile        string `yaml:"cert_file"`
+			KeyFile         string `yaml:"key_file"`
+			HealthCheckAddr string `yaml:"health_check_addr"`
 		} `yaml:"server"`
 		Relay struct {
 			UpstreamURL    string `yaml:"upstream_url"`
@@ -112,14 +157,16 @@ func loadConfig(filename string) (*config, error) {
 	}
 
 	config := &config{
-		Address:     ymlConfig.Server.Address,
-		CertFile:    ymlConfig.Server.CertFile,
-		KeyFile:     ymlConfig.Server.KeyFile,
-		UpstreamURL: ymlConfig.Relay.UpstreamURL,
+		Address:         ymlConfig.Server.Address,
+		CertFile:        ymlConfig.Server.CertFile,
+		KeyFile:         ymlConfig.Server.KeyFile,
+		UpstreamURL:     ymlConfig.Relay.UpstreamURL,
+		HealthCheckAddr: ymlConfig.Server.HealthCheckAddr,
 		RelayConfig: relay.Config{
-			Upstream:       ymlConfig.Relay.UpstreamURL,
-			FrameCapacity:  ymlConfig.Relay.FrameCapacity,
-			GroupCacheSize: ymlConfig.Relay.GroupCacheSize,
+			Upstream:        ymlConfig.Relay.UpstreamURL,
+			FrameCapacity:   ymlConfig.Relay.FrameCapacity,
+			GroupCacheSize:  ymlConfig.Relay.GroupCacheSize,
+			HealthCheckAddr: ymlConfig.Server.HealthCheckAddr,
 		},
 	}
 

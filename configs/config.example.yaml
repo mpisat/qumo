@@ -2,12 +2,17 @@
 # Copy this file to config.yaml and modify as needed
 
 server:
-  # Address to bind the relay server
+  # Address to bind the relay server (QUIC/MOQT)
   address: "0.0.0.0:4433"
   
   # TLS certificate files
   cert_file: "certs/server.crt"
   key_file: "certs/server.key"
+  
+  # Health check HTTP endpoint (optional)
+  # Used by load balancers and Kubernetes for health/readiness probes
+  # Endpoints: /health, /healthz, /ready
+  health_check_addr: ":8080"
 
 relay:
   # Upstream server URL (optional)
