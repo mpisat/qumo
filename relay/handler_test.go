@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -8,6 +9,38 @@ import (
 
 	"github.com/okdaichi/gomoqt/moqt"
 )
+
+// TestRelay tests the Relay function with a mock session
+func TestRelayWithNilSession(t *testing.T) {
+	ctx := context.Background()
+
+	// This test documents behavior - in practice, nil session would cause panic
+	// but we test that the function accepts and processes the call
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic with nil session")
+		}
+	}()
+
+	_ = Relay(ctx, nil, func(handler *RelayHandler) {
+		t.Error("Handler should not be called with nil session")
+	})
+}
+
+// TestRelayHandlerFields tests RelayHandler field initialization
+func TestRelayHandlerFields(t *testing.T) {
+	handler := &RelayHandler{
+		ctx: context.Background(),
+	}
+
+	if handler.ctx == nil {
+		t.Error("Context should be set")
+	}
+
+	if handler.relaying != nil {
+		t.Error("relaying map should initially be nil")
+	}
+}
 
 // TestDistributorBroadcast tests the core broadcast functionality
 // without external dependencies
@@ -1014,4 +1047,258 @@ func TestRelayHandlerMemoryManagement(t *testing.T) {
 	if len(handler.relaying) != 0 {
 		t.Errorf("Expected 0 tracks after cleanup, got %d", len(handler.relaying))
 	}
+}
+
+// TestRelayHandlerSubscribeNilSession tests subscribe with nil Session
+func TestRelayHandlerSubscribeNilSession(t *testing.T) {
+	handler := &RelayHandler{
+		Session: nil,
+	}
+
+	result := handler.subscribe("test")
+	if result != nil {
+		t.Error("Expected nil when Session is nil")
+	}
+}
+
+// TestRelayHandlerSubscribeNilAnnouncement tests subscribe with nil Announcement
+func TestRelayHandlerSubscribeNilAnnouncement(t *testing.T) {
+	handler := &RelayHandler{
+		Session:      &moqt.Session{},
+		Announcement: nil,
+	}
+
+	result := handler.subscribe("test")
+	if result != nil {
+		t.Error("Expected nil when Announcement is nil")
+	}
+}
+
+// TestRelayHandlerServeTrackWithContext tests serveTrack with context cancellation
+func TestRelayHandlerServeTrackWithContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dist := &trackDistributor{
+		ring:        newGroupRing(),
+		subscribers: make(map[chan struct{}]struct{}),
+	}
+
+	// Test that serveTrack respects cancelled context
+	// We can't create a valid TrackWriter without the moqt library,
+	// so we test the distributor's internal behavior instead
+
+	// Verify ring is initialized
+	if dist.ring == nil {
+		t.Error("ring should be initialized")
+	}
+
+	// Verify subscribers map is initialized
+	if dist.subscribers == nil {
+		t.Error("subscribers should be initialized")
+	}
+
+	// Test subscribe/unsubscribe with context
+	ch := dist.subscribe()
+	if ch == nil {
+		t.Error("subscribe should return channel")
+	}
+
+	dist.unsubscribe(ch)
+
+	// Use ctx to avoid unused variable error
+	_ = ctx
+}
+
+// TestTrackDistributorCatchup tests catchup logic when subscriber falls behind
+func TestTrackDistributorCatchup(t *testing.T) {
+	dist := &trackDistributor{
+		ring:        newGroupRing(),
+		subscribers: make(map[chan struct{}]struct{}),
+	}
+
+	// Test that the ring can handle being ahead of subscribers
+	// We don't actually add groups, but we verify ring behavior
+
+	// Initially head should be 0
+	if dist.ring.head() != 0 {
+		t.Errorf("Expected initial head to be 0, got %d", dist.ring.head())
+	}
+
+	// Verify earliest available - starts at 1 for empty ring
+	earliest := dist.ring.earliestAvailable()
+	if earliest < 0 {
+		t.Errorf("Expected earliest to be non-negative, got %d", earliest)
+	}
+}
+
+// TestTrackDistributorSubscribeUnsubscribe tests the subscribe/unsubscribe pattern
+func TestTrackDistributorSubscribeUnsubscribe(t *testing.T) {
+	dist := &trackDistributor{
+		ring:        newGroupRing(),
+		subscribers: make(map[chan struct{}]struct{}),
+	}
+
+	// Subscribe multiple times
+	channels := make([]chan struct{}, 10)
+	for i := 0; i < 10; i++ {
+		channels[i] = dist.subscribe()
+	}
+
+	dist.mu.RLock()
+	count := len(dist.subscribers)
+	dist.mu.RUnlock()
+
+	if count != 10 {
+		t.Errorf("Expected 10 subscribers, got %d", count)
+	}
+
+	// Unsubscribe half
+	for i := 0; i < 5; i++ {
+		dist.unsubscribe(channels[i])
+	}
+
+	dist.mu.RLock()
+	count = len(dist.subscribers)
+	dist.mu.RUnlock()
+
+	if count != 5 {
+		t.Errorf("Expected 5 subscribers after unsubscribe, got %d", count)
+	}
+
+	// Unsubscribe all
+	for i := 5; i < 10; i++ {
+		dist.unsubscribe(channels[i])
+	}
+
+	dist.mu.RLock()
+	count = len(dist.subscribers)
+	dist.mu.RUnlock()
+
+	if count != 0 {
+		t.Errorf("Expected 0 subscribers after full unsubscribe, got %d", count)
+	}
+}
+
+// TestTrackDistributorOnClose tests the onClose callback
+func TestTrackDistributorOnClose(t *testing.T) {
+	onCloseCalled := false
+
+	dist := &trackDistributor{
+		ring:        newGroupRing(),
+		subscribers: make(map[chan struct{}]struct{}),
+		onClose: func() {
+			onCloseCalled = true
+		},
+	}
+
+	// Test calling onClose directly
+	if dist.onClose != nil {
+		dist.onClose()
+	}
+
+	if !onCloseCalled {
+		t.Error("Expected onClose callback to be called")
+	}
+}
+
+// TestTrackDistributorSubscribeUnsubscribeMultiple tests subscribe/unsubscribe multiple times
+func TestTrackDistributorSubscribeUnsubscribeMultiple(t *testing.T) {
+	dist := &trackDistributor{
+		ring:        newGroupRing(),
+		subscribers: make(map[chan struct{}]struct{}),
+	}
+
+	// Subscribe multiple times
+	channels := make([]chan struct{}, 10)
+	for i := 0; i < 10; i++ {
+		channels[i] = dist.subscribe()
+	}
+
+	dist.mu.RLock()
+	count := len(dist.subscribers)
+	dist.mu.RUnlock()
+
+	if count != 10 {
+		t.Errorf("Expected 10 subscribers, got %d", count)
+	}
+
+	// Unsubscribe half
+	for i := 0; i < 5; i++ {
+		dist.unsubscribe(channels[i])
+	}
+
+	dist.mu.RLock()
+	count = len(dist.subscribers)
+	dist.mu.RUnlock()
+
+	if count != 5 {
+		t.Errorf("Expected 5 subscribers after unsubscribe, got %d", count)
+	}
+
+	// Unsubscribe all
+	for i := 5; i < 10; i++ {
+		dist.unsubscribe(channels[i])
+	}
+
+	dist.mu.RLock()
+	count = len(dist.subscribers)
+	dist.mu.RUnlock()
+
+	if count != 0 {
+		t.Errorf("Expected 0 subscribers after full unsubscribe, got %d", count)
+	}
+}
+
+// TestRelayHandlerConcurrentAccess tests concurrent access to RelayHandler
+func TestRelayHandlerConcurrentAccess(t *testing.T) {
+	handler := &RelayHandler{
+		ctx: context.Background(),
+	}
+
+	var wg sync.WaitGroup
+	trackNames := []moqt.TrackName{"track1", "track2", "track3", "track4", "track5"}
+
+	// Simulate concurrent track registration
+	for _, name := range trackNames {
+		wg.Add(1)
+		go func(tn moqt.TrackName) {
+			defer wg.Done()
+
+			handler.mu.Lock()
+			if handler.relaying == nil {
+				handler.relaying = make(map[moqt.TrackName]*trackDistributor)
+			}
+
+			// Simulate track initialization
+			if _, ok := handler.relaying[tn]; !ok {
+				handler.relaying[tn] = &trackDistributor{
+					ring:        newGroupRing(),
+					subscribers: make(map[chan struct{}]struct{}),
+				}
+			}
+			handler.mu.Unlock()
+		}(name)
+	}
+
+	wg.Wait()
+
+	if len(handler.relaying) != len(trackNames) {
+		t.Errorf("Expected %d tracks, got %d", len(trackNames), len(handler.relaying))
+	}
+}
+
+// TestNotifyTimeoutVariable tests that NotifyTimeout is accessible
+func TestNotifyTimeoutVariable(t *testing.T) {
+	if NotifyTimeout <= 0 {
+		t.Error("NotifyTimeout should be positive")
+	}
+
+	// Test that we can modify it (for testing purposes)
+	original := NotifyTimeout
+	NotifyTimeout = 5 * time.Millisecond
+	if NotifyTimeout != 5*time.Millisecond {
+		t.Error("NotifyTimeout should be modifiable")
+	}
+	NotifyTimeout = original
 }

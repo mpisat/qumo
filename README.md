@@ -15,6 +15,18 @@
 - ⚙️ Flexible YAML-based configuration
 - 🐳 Docker support (coming soon)
 
+## Port Configuration
+
+**Standard Ports:**
+- `4433/udp` - QUIC/MoQT relay server
+- `8080/tcp` - Health check & metrics HTTP endpoint
+- `5173/tcp` - Web demo frontend (development only)
+
+**URLs:**
+- Relay: `https://localhost:4433` (or `https://<WSL-IP>:4433` on Windows)
+- Health: `http://localhost:8080/health`
+- Web Demo: `http://localhost:5173`
+
 ## Quick Start
 
 ### Prerequisites

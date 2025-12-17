@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log"
 	"log/slog"
+	"net/http"
 	"sync"
 
 	"github.com/okdaichi/gomoqt/moqt"
@@ -17,6 +18,8 @@ type Server struct {
 	TLSConfig  *tls.Config
 	QUICConfig *quic.Config
 	Config     *Config
+
+	CheckHTTPOrigin func(r *http.Request) bool
 
 	Client *moqt.Client
 
@@ -61,9 +64,10 @@ func (s *Server) ListenAndServe() error {
 	clientMux := s.clientTrackMux
 
 	s.server = &moqt.Server{
-		Addr:       s.Addr,
-		TLSConfig:  s.TLSConfig,
-		QUICConfig: s.QUICConfig,
+		Addr:            s.Addr,
+		TLSConfig:       s.TLSConfig,
+		QUICConfig:      s.QUICConfig,
+		CheckHTTPOrigin: s.CheckHTTPOrigin,
 		SetupHandler: moqt.SetupHandlerFunc(func(w moqt.SetupResponseWriter, r *moqt.SetupRequest) {
 			downstream, err := moqt.Accept(w, r, serverMux)
 			if err != nil {
@@ -92,37 +96,55 @@ func (s *Server) ListenAndServe() error {
 		}),
 	}
 
-	s.client = &moqt.Client{
-		TLSConfig:  s.TLSConfig,
-		QUICConfig: s.QUICConfig,
+	var wg sync.WaitGroup
+
+	// Only connect to upstream if URL is provided
+	if s.Config.Upstream != "" {
+		s.client = &moqt.Client{
+			TLSConfig:  s.TLSConfig,
+			QUICConfig: s.QUICConfig,
+		}
+
+		wg.Go(func() {
+			upstream, err := s.client.Dial(ctx, s.Config.Upstream, clientMux)
+			if err != nil {
+				log.Printf("Failed to connect to upstream: %v", err)
+				s.Health.SetUpstreamConnected(false)
+				return
+			}
+			s.Health.SetUpstreamConnected(true)
+			log.Printf("Connected to upstream: %s", s.Config.Upstream)
+
+			defer func() {
+				upstream.CloseWithError(moqt.NoError, moqt.SessionErrorText(moqt.NoError))
+				s.Health.SetUpstreamConnected(false)
+			}()
+
+			err = Relay(ctx, upstream, func(handler *RelayHandler) {
+				// Announce to downstream peers with server mux
+				serverMux.Announce(handler.Announcement, handler)
+			})
+			if err != nil {
+				return
+			}
+
+		})
 	}
 
-	go func() {
-		upstream, err := s.client.Dial(ctx, s.Config.Upstream, clientMux)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		err := s.server.HandleWebTransport(w, r)
 		if err != nil {
-			log.Printf("Failed to connect to upstream: %v", err)
-			s.Health.SetUpstreamConnected(false)
-			return
+			slog.Error("failed to handle web transport", "err", err)
 		}
-		s.Health.SetUpstreamConnected(true)
-		log.Printf("Connected to upstream: %s", s.Config.Upstream)
+	})
 
-		defer func() {
-			upstream.CloseWithError(moqt.NoError, moqt.SessionErrorText(moqt.NoError))
-			s.Health.SetUpstreamConnected(false)
-		}()
+	// Start server - this will block until server closes
+	err := s.server.ListenAndServe()
 
-		err = Relay(ctx, upstream, func(handler *RelayHandler) {
-			// Announce to downstream peers with server mux
-			serverMux.Announce(handler.Announcement, handler)
-		})
-		if err != nil {
-			return
-		}
+	// Wait for upstream goroutine to finish (if it was started)
+	wg.Wait()
 
-	}()
-
-	return s.server.ListenAndServe()
+	return err
 }
 
 func (s *Server) Close() error {
@@ -145,14 +167,34 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.init()
 
 	if s.server != nil {
-		if err := s.server.Shutdown(ctx); err != nil {
-			return err
+		done := make(chan error, 1)
+		go func() {
+			done <- s.server.Shutdown(ctx)
+		}()
+
+		select {
+		case err := <-done:
+			if err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
 	if s.client != nil {
-		if err := s.client.Shutdown(ctx); err != nil {
-			return err
+		done := make(chan error, 1)
+		go func() {
+			done <- s.client.Shutdown(ctx)
+		}()
+
+		select {
+		case err := <-done:
+			if err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 

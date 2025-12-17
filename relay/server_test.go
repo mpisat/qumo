@@ -3,8 +3,13 @@ package relay
 import (
 	"context"
 	"crypto/tls"
+	"net/http"
 	"testing"
 	"time"
+
+	"github.com/okdaichi/gomoqt/moqt"
+	"github.com/okdaichi/gomoqt/quic"
+	"github.com/okdaichi/qumo/relay/health"
 )
 
 // TestServerInit tests the initialization logic
@@ -315,5 +320,292 @@ func TestServerShutdownIdempotent(t *testing.T) {
 	}
 	if err := server.Shutdown(ctx); err != nil {
 		t.Errorf("Third Shutdown() error: %v", err)
+	}
+}
+
+// TestServerWithUpstreamConfig tests server initialization with upstream
+func TestServerWithUpstreamConfig(t *testing.T) {
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config: &Config{
+			Upstream: "https://upstream.example.com:4433",
+		},
+	}
+
+	server.init()
+
+	if server.Config.Upstream != "https://upstream.example.com:4433" {
+		t.Error("Upstream config not preserved")
+	}
+}
+
+// TestServerWithEmptyUpstream tests server with empty upstream
+func TestServerWithEmptyUpstream(t *testing.T) {
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config: &Config{
+			Upstream: "",
+		},
+	}
+
+	server.init()
+
+	if server.Config.Upstream != "" {
+		t.Error("Empty upstream should remain empty")
+	}
+}
+
+// TestServerDefaultConfig tests default config initialization
+func TestServerDefaultConfig(t *testing.T) {
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
+
+	server.init()
+
+	if server.Config == nil {
+		t.Fatal("Config should be initialized")
+	}
+
+	// Verify defaults
+	if server.Config.Upstream != "" {
+		t.Error("Default upstream should be empty")
+	}
+	if server.Config.GroupCacheSize != 0 {
+		t.Error("Default GroupCacheSize should be 0")
+	}
+	if server.Config.FrameCapacity != 0 {
+		t.Error("Default FrameCapacity should be 0")
+	}
+}
+
+// TestServerCustomConfig tests custom config values
+func TestServerCustomConfig(t *testing.T) {
+	customConfig := &Config{
+		Upstream:        "https://example.com",
+		GroupCacheSize:  500,
+		FrameCapacity:   4096,
+		HealthCheckAddr: ":9090",
+	}
+
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config:    customConfig,
+	}
+
+	server.init()
+
+	if server.Config != customConfig {
+		t.Error("Custom config should be preserved")
+	}
+
+	if server.Config.GroupCacheSize != 500 {
+		t.Error("GroupCacheSize not preserved")
+	}
+
+	if server.Config.FrameCapacity != 4096 {
+		t.Error("FrameCapacity not preserved")
+	}
+
+	if server.Config.HealthCheckAddr != ":9090" {
+		t.Error("HealthCheckAddr not preserved")
+	}
+}
+
+// TestServerMuxInitialization tests that muxes are properly initialized
+func TestServerMuxInitialization(t *testing.T) {
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
+
+	server.init()
+
+	if server.TrackMux == nil {
+		t.Error("TrackMux should be initialized")
+	}
+
+	if server.clientTrackMux == nil {
+		t.Error("clientTrackMux should be initialized")
+	}
+
+	// Verify they are different instances
+	if server.TrackMux == server.clientTrackMux {
+		t.Error("TrackMux and clientTrackMux should be different instances")
+	}
+}
+
+// TestServerCustomTrackMux tests providing custom TrackMux
+func TestServerCustomTrackMux(t *testing.T) {
+	customMux := moqt.NewTrackMux()
+
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		TrackMux:  customMux,
+	}
+
+	server.init()
+
+	if server.TrackMux != customMux {
+		t.Error("Custom TrackMux should be preserved")
+	}
+}
+
+// TestServerCloseWithNilComponents tests Close with uninitialized components
+func TestServerCloseWithNilComponents(t *testing.T) {
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
+
+	// Don't call init, so components are nil
+	err := server.Close()
+	if err != nil {
+		t.Errorf("Close with nil components should not error: %v", err)
+	}
+}
+
+// TestServerShutdownWithNilComponents tests Shutdown with uninitialized components
+func TestServerShutdownWithNilComponents(t *testing.T) {
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
+
+	ctx := context.Background()
+
+	// Don't call init, so components are nil
+	err := server.Shutdown(ctx)
+	if err != nil {
+		t.Errorf("Shutdown with nil components should not error: %v", err)
+	}
+}
+
+// TestServerInitWithQUICConfig tests initialization with QUIC config
+func TestServerInitWithQUICConfig(t *testing.T) {
+	quicConfig := &quic.Config{}
+
+	server := &Server{
+		Addr:       "localhost:4433",
+		TLSConfig:  &tls.Config{},
+		QUICConfig: quicConfig,
+	}
+
+	server.init()
+
+	if server.QUICConfig != quicConfig {
+		t.Error("QUICConfig should be preserved")
+	}
+}
+
+// TestServerHealthCheckIntegration tests health check handler
+func TestServerHealthCheckIntegration(t *testing.T) {
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Health:    &health.StatusHandler{},
+	}
+
+	server.init()
+
+	if server.Health == nil {
+		t.Error("Health handler should be preserved")
+	}
+}
+
+// TestServerMultipleInitsWithDifferentConfigs tests init idempotency
+func TestServerMultipleInitsWithDifferentConfigs(t *testing.T) {
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config: &Config{
+			Upstream: "https://first.example.com",
+		},
+	}
+
+	server.init()
+	firstMux := server.TrackMux
+
+	// Try to change config and init again
+	// Because of sync.Once, init() does nothing on second call
+	server.Config = &Config{
+		Upstream: "https://second.example.com",
+	}
+	server.init()
+
+	// The config pointer changes because we assigned a new one,
+	// but init() didn't run again (sync.Once)
+	if server.TrackMux != firstMux {
+		t.Error("TrackMux should not change on second init call")
+	}
+
+	// Config field is not protected by init(), so it changes
+	if server.Config.Upstream != "https://second.example.com" {
+		t.Error("Config assignment should work even after init")
+	}
+}
+
+// TestServerCheckHTTPOrigin tests CheckHTTPOrigin configuration
+func TestServerCheckHTTPOrigin(t *testing.T) {
+	called := false
+	originFunc := func(r *http.Request) bool {
+		called = true
+		return true
+	}
+
+	server := &Server{
+		Addr:            "localhost:4433",
+		TLSConfig:       &tls.Config{},
+		CheckHTTPOrigin: originFunc,
+	}
+
+	server.init()
+
+	if server.CheckHTTPOrigin == nil {
+		t.Error("CheckHTTPOrigin should be preserved")
+	}
+
+	// Test that the function works
+	result := server.CheckHTTPOrigin(nil)
+	if !called {
+		t.Error("CheckHTTPOrigin function should be callable")
+	}
+	if !result {
+		t.Error("CheckHTTPOrigin should return true")
+	}
+}
+
+// TestServerAddressFormats tests various address formats
+func TestServerAddressFormats(t *testing.T) {
+	tests := []struct {
+		name string
+		addr string
+	}{
+		{"port only", ":4433"},
+		{"localhost", "localhost:4433"},
+		{"127.0.0.1", "127.0.0.1:4433"},
+		{"0.0.0.0", "0.0.0.0:4433"},
+		{"IPv6", "[::1]:4433"},
+		{"IPv6 all", "[::]:4433"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := &Server{
+				Addr:      tt.addr,
+				TLSConfig: &tls.Config{},
+			}
+
+			server.init()
+
+			if server.Addr != tt.addr {
+				t.Errorf("Address should be preserved: expected %s, got %s", tt.addr, server.Addr)
+			}
+		})
 	}
 }

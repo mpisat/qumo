@@ -147,6 +147,13 @@ func (d *trackDistributor) serveTrack(ctx context.Context, tw *moqt.TrackWriter)
 	)
 	defer span.End()
 
+	// Get track writer context once and check if it's valid
+	twCtx := tw.Context()
+	var twDone <-chan struct{}
+	if twCtx != nil {
+		twDone = twCtx.Done()
+	}
+
 	// Subscribe to notifications
 	notify := d.subscribe()
 	defer d.unsubscribe(notify)
@@ -157,12 +164,6 @@ func (d *trackDistributor) serveTrack(ctx context.Context, tw *moqt.TrackWriter)
 	}
 
 	for {
-		select {
-		case <-tw.Context().Done():
-			return
-		default:
-		}
-
 		latest := d.ring.head()
 
 		if last < latest {
@@ -226,7 +227,11 @@ func (d *trackDistributor) serveTrack(ctx context.Context, tw *moqt.TrackWriter)
 			// New group available, retry immediately
 		case <-time.After(NotifyTimeout):
 			// Timeout fallback (1ms for optimal CPU/latency balance)
-		case <-tw.Context().Done():
+		case <-ctx.Done():
+			// Relay shutdown
+			return
+		case <-twDone:
+			// Client disconnected (only if twDone is not nil)
 			return
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/okdaichi/qumo/observability"
 	"github.com/okdaichi/qumo/relay"
@@ -84,6 +85,9 @@ func main() {
 		TLSConfig: tlsConfig,
 		Config:    &config.RelayConfig,
 		Health:    healthHandler,
+		CheckHTTPOrigin: func(r *http.Request) bool {
+			return true //TODO:
+		},
 	}
 
 	// Start health check HTTP server if configured
@@ -114,6 +118,7 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
+		log.Printf("Starting MoQ relay server on %s", config.Address)
 		if err := server.ListenAndServe(); err != nil {
 			log.Printf("Server error: %v", err)
 		}
@@ -123,11 +128,13 @@ func main() {
 
 	// Wait for shutdown signal
 	<-ctx.Done()
+	cancel() // Stop listening for signals, so next Ctrl+C kills the program
 
 	slog.Info("Shutting down server...")
 
-	// Graceful shutdown
-	shutdownCtx := context.Background()
+	// Graceful shutdown with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
 
 	// Shutdown health check server
 	if httpServer != nil {
@@ -204,7 +211,7 @@ func setupTLS(certFile, keyFile string) (*tls.Config, error) {
 
 	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		NextProtos:   []string{"h3"}, // HTTP/3 for QUIC
+		NextProtos:   []string{"h3", "moq-00"}, // HTTP/3 for WebTransport, MOQ native QUIC
 	}, nil
 }
 
