@@ -39,3 +39,6 @@ certs/
 
 # Logs
 *.log
+
+# Node modules (if using Node.js)
+**/node_modules/

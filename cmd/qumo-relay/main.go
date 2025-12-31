@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/okdaichi/qumo/observability"
 	"github.com/okdaichi/qumo/relay"
 	"github.com/okdaichi/qumo/relay/health"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -27,6 +26,8 @@ type config struct {
 	KeyFile         string
 	UpstreamURL     string
 	HealthCheckAddr string
+	MetricsAddr     string
+	AdminAddr       string
 	RelayConfig     relay.Config
 }
 
@@ -46,30 +47,11 @@ func main() {
 		log.Fatalf("Failed to setup TLS: %v", err)
 	}
 
-	// Apply relay configuration
-	relay.NewFrameCapacity = config.RelayConfig.FrameCapacity
-	relay.GroupCacheSize = config.RelayConfig.GroupCacheSize
-
-	log.Printf("Starting qumo-relay server on %s", config.Address)
+	slog.Info("Starting qumo-relay server", "address", config.Address)
 
 	// Setup signal handling for graceful shutdown
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-
-	// Initialize observability
-	otelEndpoint := getEnv("OTEL_ENDPOINT", "")
-	err = observability.Setup(ctx, observability.Config{
-		Service:      "qumo-relay",
-		Version:      "v0.1.0",
-		TraceAddr:    otelEndpoint,
-		LogAddr:      getEnv("OTEL_LOG_ENDPOINT", otelEndpoint), // defaults to same as trace
-		SamplingRate: getEnvFloat("OTEL_SAMPLING_RATE", 1.0),
-		Metrics:      true,
-	})
-	if err != nil {
-		log.Fatalf("Failed to initialize observability: %v", err)
-	}
-	defer observability.Shutdown(ctx)
 
 	// Create health check handler
 	healthHandler := health.NewStatusHandler()
@@ -84,7 +66,6 @@ func main() {
 		Addr:      config.Address,
 		TLSConfig: tlsConfig,
 		Config:    &config.RelayConfig,
-		Health:    healthHandler,
 		CheckHTTPOrigin: func(r *http.Request) bool {
 			return true //TODO:
 		},
