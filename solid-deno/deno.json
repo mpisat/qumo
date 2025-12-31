@@ -1,5 +1,6 @@
 {
   "imports": {
+    "@okdaichi/golikejs": "jsr:@okdaichi/golikejs@0.7.0",
     "@okdaichi/moq": "jsr:@okdaichi/moq@0.8.0"
   }
 }

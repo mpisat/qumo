@@ -1,6 +1,7 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@okdaichi/golikejs@0.7.0": "0.7.0",
     "jsr:@okdaichi/golikejs@~0.6.1": "0.6.1",
     "jsr:@okdaichi/moq@0.8.0": "0.8.0",
     "npm:@types/node@^24.10.1": "24.10.4",
@@ -13,10 +14,13 @@
     "@okdaichi/golikejs@0.6.1": {
       "integrity": "2027c24e2fde860d637ee9559dba73d59650d20c35db5ce8d69f18fb3c97ecbc"
     },
+    "@okdaichi/golikejs@0.7.0": {
+      "integrity": "8880fbdb21e6c9b313bb51439f4d3c374582cc82ec43f7db7bcc25a2d0988c48"
+    },
     "@okdaichi/moq@0.8.0": {
       "integrity": "780ae170497b4c14f92b9b4a1ba3d59d4c43c42313b0e94d884bd4d138998b01",
       "dependencies": [
-        "jsr:@okdaichi/golikejs"
+        "jsr:@okdaichi/golikejs@~0.6.1"
       ]
     }
   },
@@ -767,6 +771,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@okdaichi/golikejs@0.7.0",
       "jsr:@okdaichi/moq@0.8.0"
     ],
     "packageJson": {

@@ -1,6 +1,6 @@
 /* @refresh reload */
 import { render } from 'solid-js/web'
-import { ConfigProvider } from './context/index.ts'
+import { ConfigProvider } from './config.tsx'
 import './index.css'
 import App from './App.tsx'
 
