@@ -201,7 +201,7 @@ export function SubscribeBoard(props: { session: Promise<Session> }) {
 	};
 
 	// Auto-reconfigure when canvas size changes
-	createEffect(async () => {
+	createEffect(() => {
 		const width = canvasWidth();
 		const height = canvasHeight();
 
