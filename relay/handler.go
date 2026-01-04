@@ -56,7 +56,7 @@ func (h *RelayHandler) ServeTrack(tw *moqt.TrackWriter) {
 		"track_name", tw.TrackName,
 	)
 
-	logger.Info("Starting relay serve track")
+	logger.Info("Relay track started")
 
 	h.mu.Lock()
 	if h.relaying == nil {
@@ -76,7 +76,7 @@ func (h *RelayHandler) ServeTrack(tw *moqt.TrackWriter) {
 	}
 	h.mu.Unlock()
 
-	logger.Info("Starting track egress")
+	logger.Info("Relaying track")
 
 	tr.egress(tw)
 }
@@ -136,8 +136,6 @@ type trackDistributor struct {
 }
 
 func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
-	slog.Info("Starting egress", "track", tw.TrackName)
-
 	// Get track writer context once and check if it's valid
 	twCtx := tw.Context()
 
@@ -149,8 +147,6 @@ func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
 	if last > 0 {
 		last--
 	}
-
-	firstFrameSent := false
 
 	for {
 		latest := d.ring.head()
@@ -174,10 +170,6 @@ func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
 				continue
 			}
 
-			if !firstFrameSent {
-				slog.Info("Opening first group", "seq", cache.seq)
-			}
-
 			gw, err := tw.OpenGroupAt(cache.seq)
 			if err != nil {
 				return
@@ -188,10 +180,6 @@ func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
 			for {
 				frame := cache.next(frameIdx)
 				if frame != nil {
-					if !firstFrameSent {
-						slog.Info("Sending first frame", "seq", cache.seq, "frameIdx", frameIdx)
-						firstFrameSent = true
-					}
 					if err := gw.WriteFrame(frame); err != nil {
 						gw.Close()
 						return
