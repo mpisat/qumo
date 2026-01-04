@@ -18,12 +18,12 @@
 ## Port Configuration
 
 **Standard Ports:**
-- `4433/udp` - QUIC/MoQT relay server
+- `6670/udp` - QUIC/MoQT relay server
 - `8080/tcp` - Health check & metrics HTTP endpoint
 - `5173/tcp` - Web demo frontend (development only)
 
 **URLs:**
-- Relay: `https://localhost:4433` (or `https://<WSL-IP>:4433` on Windows)
+- Relay: `https://localhost:6670`
 - Health: `http://localhost:8080/health`
 - Web Demo: `http://localhost:5173`
 
@@ -69,13 +69,14 @@ Basic configuration structure:
 
 ```yaml
 server:
-  address: "0.0.0.0:4433"
+  address: "0.0.0.0:6670"
   cert_file: "certs/server.crt"
   key_file: "certs/server.key"
+  health_check_addr: ":8080"
 
 relay:
   upstream_url: ""           # Optional upstream server
-  group_cache_size: 100      # Number of groups to cache
+  group_cache_size: 8        # Number of groups to cache
   frame_capacity: 1500       # Frame buffer size in bytes
 ```
 
@@ -106,7 +107,9 @@ qumo/
 │   ├── handler.go         # Track relay handler
 │   ├── frame_pool.go      # Memory-efficient frame pooling
 │   ├── group_cache.go     # Ring buffer group cache
-│   └── config.go          # Configuration structures
+│   ├── config.go          # Configuration structures
+│   └── health/            # Health check endpoints
+├── solid-deno/            # SolidJS web demo application
 ├── configs/               # Configuration examples
 ├── certs/                 # TLS certificates
 ├── docs/                  # Documentation
@@ -127,11 +130,6 @@ go test -cover ./...
 # Run with race detector
 go test -race ./...
 ```
-
-Test coverage:
-- **relay**: 32.7% statement coverage with 67 test cases
-- **cmd/qumo-relay**: 42.9% statement coverage with 12 test cases
-- Focus on concurrent operations, edge cases, and performance
 
 ## Documentation
 
