@@ -14,13 +14,13 @@ export function UserProvider(props: ParentProps & { username: Accessor<string> }
 }
 
 export function UserController(props: { regenerate: () => void }) {
-    return (
-        <button
-            type="button"
-            onClick={() => props.regenerate()}
-            title="Generate new username"
-        >
-            Regenerate🔄
-        </button>
-    );
+	return (
+		<button
+			type="button"
+			onClick={() => props.regenerate()}
+			title="Generate new username"
+		>
+			Regenerate🔄
+		</button>
+	);
 }

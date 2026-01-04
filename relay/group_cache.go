@@ -11,9 +11,20 @@ import (
 const DefaultGroupCacheSize = 8
 
 type groupCache struct {
-	mu     sync.Mutex // Protects frames slice for defensive programming
-	seq    moqt.GroupSequence
-	frames []*moqt.Frame
+	mu       sync.Mutex // Protects frames slice for defensive programming
+	seq      moqt.GroupSequence
+	frames   []*moqt.Frame
+	complete atomic.Bool // True when all frames have been added
+}
+
+// isComplete returns true if the group has finished receiving all frames.
+func (gc *groupCache) isComplete() bool {
+	return gc.complete.Load()
+}
+
+// markComplete marks the group as complete.
+func (gc *groupCache) markComplete() {
+	gc.complete.Store(true)
 }
 
 // Append appends a frame to the group cache.
@@ -30,8 +41,6 @@ func (gc *groupCache) append(f *moqt.Frame) {
 	_, _ = f.WriteTo(clone)
 
 	gc.frames = append(gc.frames, clone)
-
-	slog.Debug("appended frame to group cache", "seq", gc.seq, "frame_count", len(gc.frames))
 }
 
 // next returns the frame at the given index.
@@ -43,7 +52,6 @@ func (gc *groupCache) next(index int) *moqt.Frame {
 	if index < 0 || index >= len(gc.frames) {
 		return nil
 	}
-	slog.Debug("retrieved frame from group cache", "seq", gc.seq, "index", index)
 	return gc.frames[index]
 }
 
@@ -61,7 +69,7 @@ type groupRing struct {
 	pos    atomic.Uint64
 }
 
-func (ring *groupRing) add(group *moqt.GroupReader) {
+func (ring *groupRing) add(group *moqt.GroupReader, onFrame func()) {
 	cache := &groupCache{
 		seq:    group.GroupSequence(),
 		frames: make([]*moqt.Frame, 0, 1),
@@ -72,21 +80,28 @@ func (ring *groupRing) add(group *moqt.GroupReader) {
 
 	frame := DefaultFramePool.Get()
 
+	frameCount := 0
 	for frame := range group.Frames(frame) {
+		frameCount++
 		cache.append(frame)
+
+		// Notify subscribers that a new frame is available
+		if onFrame != nil {
+			onFrame()
+		}
 	}
 
-	slog.Debug("added group to ring", "seq", cache.seq, "pos", idx)
+	slog.Debug("group cached", "seq", cache.seq, "frames", frameCount)
+	cache.markComplete()
+
+	// Final notification for group completion
+	if onFrame != nil {
+		onFrame()
+	}
 }
 
 func (ring *groupRing) get(seq moqt.GroupSequence) *groupCache {
-	cache := ring.caches[uint64(seq)%uint64(ring.size)].Load()
-	if cache != nil {
-		slog.Debug("retrieved group cache", "seq", seq, "cache_seq", cache.seq)
-	} else {
-		slog.Debug("retrieved group cache", "seq", seq, "cache", "nil")
-	}
-	return cache
+	return ring.caches[uint64(seq)%uint64(ring.size)].Load()
 }
 
 func (ring *groupRing) head() moqt.GroupSequence {

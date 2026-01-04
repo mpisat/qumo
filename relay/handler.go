@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -50,6 +51,13 @@ type RelayHandler struct {
 }
 
 func (h *RelayHandler) ServeTrack(tw *moqt.TrackWriter) {
+	logger := slog.With(
+		"broadcast_path", tw.BroadcastPath,
+		"track_name", tw.TrackName,
+	)
+
+	logger.Info("Starting relay serve track")
+
 	h.mu.Lock()
 	if h.relaying == nil {
 		h.relaying = make(map[moqt.TrackName]*trackDistributor)
@@ -62,10 +70,13 @@ func (h *RelayHandler) ServeTrack(tw *moqt.TrackWriter) {
 		if tr == nil {
 			h.mu.Unlock()
 			tw.CloseWithError(moqt.TrackNotFoundErrorCode)
+			logger.Info("Track not found, closing track writer")
 			return
 		}
 	}
 	h.mu.Unlock()
+
+	logger.Info("Starting track egress")
 
 	tr.egress(tw)
 }
@@ -125,12 +136,10 @@ type trackDistributor struct {
 }
 
 func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
+	slog.Info("Starting egress", "track", tw.TrackName)
+
 	// Get track writer context once and check if it's valid
 	twCtx := tw.Context()
-	var twDone <-chan struct{}
-	if twCtx != nil {
-		twDone = twCtx.Done()
-	}
 
 	// Subscribe to notifications
 	notify := d.subscribe()
@@ -140,6 +149,8 @@ func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
 	if last > 0 {
 		last--
 	}
+
+	firstFrameSent := false
 
 	for {
 		latest := d.ring.head()
@@ -159,7 +170,12 @@ func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
 
 			cache := d.ring.get(last)
 			if cache == nil {
+				last--
 				continue
+			}
+
+			if !firstFrameSent {
+				slog.Info("Opening first group", "seq", cache.seq)
 			}
 
 			gw, err := tw.OpenGroupAt(cache.seq)
@@ -167,8 +183,36 @@ func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
 				return
 			}
 
-			for _, frame := range cache.frames {
-				if err := gw.WriteFrame(frame); err != nil {
+			// Incrementally send frames as they become available
+			frameIdx := 0
+			for {
+				frame := cache.next(frameIdx)
+				if frame != nil {
+					if !firstFrameSent {
+						slog.Info("Sending first frame", "seq", cache.seq, "frameIdx", frameIdx)
+						firstFrameSent = true
+					}
+					if err := gw.WriteFrame(frame); err != nil {
+						gw.Close()
+						return
+					}
+					frameIdx++
+					continue
+				}
+
+				// No more frames available right now
+				if cache.isComplete() {
+					// Group is complete, move to next group
+					break
+				}
+
+				// Wait for more frames
+				select {
+				case <-notify:
+					// New frame may be available
+				case <-time.After(NotifyTimeout):
+					// Poll timeout
+				case <-twCtx.Done():
 					gw.Close()
 					return
 				}
@@ -184,11 +228,8 @@ func (d *trackDistributor) egress(tw *moqt.TrackWriter) {
 			// New group available, retry immediately
 		case <-time.After(NotifyTimeout):
 			// Timeout fallback (1ms for optimal CPU/latency balance)
-		case <-tw.Context().Done():
-			// Relay shutdown
-			return
-		case <-twDone:
-			// Client disconnected (only if twDone is not nil)
+		case <-twCtx.Done():
+			// Client disconnected or relay shutdown
 			return
 		}
 	}
@@ -221,25 +262,24 @@ func (d *trackDistributor) ingest(ctx context.Context, src *moqt.TrackReader) {
 	defer d.close()
 
 	for {
-
 		gr, err := src.AcceptGroup(ctx)
 		if err != nil {
+			slog.Debug("ingest stopped", "error", err)
 			return
 		}
 
-		d.ring.add(gr)
-
-		// Broadcast notification (RLock only, non-blocking, zero alloc)
-		d.mu.RLock()
-		notified := 0
-		for ch := range d.subscribers {
-			select {
-			case ch <- struct{}{}:
-				notified++
-			default:
-				// Channel full, subscriber will wake up on timeout
+		// Pass notification callback to ring.add() for frame-level notifications
+		d.ring.add(gr, func() {
+			// Broadcast notification for each frame (RLock only, non-blocking)
+			d.mu.RLock()
+			for ch := range d.subscribers {
+				select {
+				case ch <- struct{}{}:
+				default:
+					// Channel full, subscriber will wake up on timeout
+				}
 			}
-		}
-		d.mu.RUnlock()
+			d.mu.RUnlock()
+		})
 	}
 }
