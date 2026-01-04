@@ -2,6 +2,7 @@ package relay
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"testing"
 	"time"
@@ -14,49 +15,62 @@ import (
 
 // TestServer_Init tests the initialization logic
 func TestServer_Init(t *testing.T) {
-	tests := []struct {
-		name       string
-		serverOpts []func(*Server)
-		expectErr  bool
-	}{
-		{
-			name:       "init with TLS config",
-			serverOpts: nil,
-			expectErr:  false,
-		},
-		{
-			name:       "init without TLS config panics",
-			serverOpts: []func(*Server){withoutTLS()},
-			expectErr:  true,
-		},
-		{
-			name: "init with custom config",
-			serverOpts: []func(*Server){withConfig(&Config{
+	t.Run("init with TLS config", func(t *testing.T) {
+		server := &Server{
+			Addr:      "localhost:4433",
+			TLSConfig: &tls.Config{},
+		}
+
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Expected no panic but got: %v", r)
+			}
+		}()
+		server.init()
+		require.NotNil(t, server.TrackMux)
+	})
+
+	t.Run("init without TLS config panics", func(t *testing.T) {
+		server := &Server{
+			Addr:      "localhost:4433",
+			TLSConfig: nil,
+		}
+
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Expected panic but got none")
+			}
+		}()
+		server.init()
+	})
+
+	t.Run("init with custom config", func(t *testing.T) {
+		server := &Server{
+			Addr:      "localhost:4433",
+			TLSConfig: &tls.Config{},
+			Config: &Config{
 				Upstream:       "https://upstream.example.com",
 				FrameCapacity:  2000,
 				GroupCacheSize: 200,
-			})},
-			expectErr: false,
-		},
-	}
+			},
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := newTestServer(tt.serverOpts...)
-
-			if tt.expectErr {
-				assertPanics(t, func() { server.init() })
-			} else {
-				assertNoPanic(t, func() { server.init() })
-				assertServerInitialized(t, server)
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Expected no panic but got: %v", r)
 			}
-		})
-	}
+		}()
+		server.init()
+		require.NotNil(t, server.TrackMux)
+	})
 }
 
 // TestServer_Init_Idempotent tests that init can be called multiple times safely
 func TestServer_Init_Idempotent(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 
 	server.init()
 	config1 := server.Config
@@ -72,7 +86,10 @@ func TestServer_Init_Idempotent(t *testing.T) {
 
 // TestServer_Close_WithoutInit tests Close without initialization
 func TestServer_Close_WithoutInit(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 
 	err := server.Close()
 	require.NoError(t, err, "Close should not error without init")
@@ -80,7 +97,10 @@ func TestServer_Close_WithoutInit(t *testing.T) {
 
 // TestServer_Close_AfterInit tests Close after initialization
 func TestServer_Close_AfterInit(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.init()
 
 	err := server.Close()
@@ -89,7 +109,10 @@ func TestServer_Close_AfterInit(t *testing.T) {
 
 // TestServer_Shutdown_WithoutInit tests Shutdown without initialization
 func TestServer_Shutdown_WithoutInit(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	ctx := context.Background()
 
 	err := server.Shutdown(ctx)
@@ -98,7 +121,10 @@ func TestServer_Shutdown_WithoutInit(t *testing.T) {
 
 // TestServer_Shutdown_AfterInit tests Shutdown after initialization
 func TestServer_Shutdown_AfterInit(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.init()
 	ctx := context.Background()
 
@@ -108,7 +134,10 @@ func TestServer_Shutdown_AfterInit(t *testing.T) {
 
 // TestServer_Shutdown_WithTimeout tests Shutdown with context timeout
 func TestServer_Shutdown_WithTimeout(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.init()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -120,7 +149,10 @@ func TestServer_Shutdown_WithTimeout(t *testing.T) {
 
 // TestServer_Muxes_SeparateInstances tests that server creates separate muxes
 func TestServer_Muxes_SeparateInstances(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.init()
 
 	require.NotNil(t, server.TrackMux, "TrackMux should be initialized")
@@ -128,9 +160,17 @@ func TestServer_Muxes_SeparateInstances(t *testing.T) {
 
 // TestServer_Init_WithNilTLSConfig tests that server panics without TLS config
 func TestServer_Init_WithNilTLSConfig(t *testing.T) {
-	server := newTestServer(withoutTLS())
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: nil,
+	}
 
-	assertPanics(t, func() { server.init() })
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic but got none")
+		}
+	}()
+	server.init()
 }
 
 // TestServer_Config_Persistence tests that provided config is preserved
@@ -141,7 +181,11 @@ func TestServer_Config_Persistence(t *testing.T) {
 		GroupCacheSize: 500,
 	}
 
-	server := newTestServer(withConfig(customConfig))
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config:    customConfig,
+	}
 	server.init()
 
 	assert.Same(t, customConfig, server.Config, "Server should preserve custom config")
@@ -152,7 +196,10 @@ func TestServer_Config_Persistence(t *testing.T) {
 
 // TestServer_Init_Concurrent tests concurrent initialization
 func TestServer_Init_Concurrent(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
@@ -171,7 +218,10 @@ func TestServer_Init_Concurrent(t *testing.T) {
 
 // TestServer_Close_Idempotent tests that Close can be called multiple times
 func TestServer_Close_Idempotent(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.init()
 
 	require.NoError(t, server.Close(), "First Close should not error")
@@ -181,7 +231,10 @@ func TestServer_Close_Idempotent(t *testing.T) {
 
 // TestServer_Shutdown_Idempotent tests that Shutdown can be called multiple times
 func TestServer_Shutdown_Idempotent(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.init()
 	ctx := context.Background()
 
@@ -192,9 +245,13 @@ func TestServer_Shutdown_Idempotent(t *testing.T) {
 
 // TestServer_Config_WithUpstream tests server initialization with upstream
 func TestServer_Config_WithUpstream(t *testing.T) {
-	server := newTestServer(withConfig(&Config{
-		Upstream: "https://upstream.example.com:4433",
-	}))
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config: &Config{
+			Upstream: "https://upstream.example.com:4433",
+		},
+	}
 	server.init()
 
 	assert.Equal(t, "https://upstream.example.com:4433", server.Config.Upstream, "Upstream config should be preserved")
@@ -202,9 +259,13 @@ func TestServer_Config_WithUpstream(t *testing.T) {
 
 // TestServer_Config_WithEmptyUpstream tests server with empty upstream
 func TestServer_Config_WithEmptyUpstream(t *testing.T) {
-	server := newTestServer(withConfig(&Config{
-		Upstream: "",
-	}))
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config: &Config{
+			Upstream: "",
+		},
+	}
 	server.init()
 
 	assert.Empty(t, server.Config.Upstream, "Empty upstream should remain empty")
@@ -219,7 +280,11 @@ func TestServer_Config_CustomValues(t *testing.T) {
 		HealthCheckAddr: ":9090",
 	}
 
-	server := newTestServer(withConfig(customConfig))
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config:    customConfig,
+	}
 	server.init()
 
 	assert.Same(t, customConfig, server.Config, "Custom config should be preserved")
@@ -230,7 +295,10 @@ func TestServer_Config_CustomValues(t *testing.T) {
 
 // TestServer_Mux_Initialization tests that muxes are properly initialized
 func TestServer_Mux_Initialization(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.init()
 
 	require.NotNil(t, server.TrackMux, "TrackMux should be initialized")
@@ -239,7 +307,10 @@ func TestServer_Mux_Initialization(t *testing.T) {
 // TestServer_Mux_CustomTrackMux tests providing custom TrackMux
 func TestServer_Mux_CustomTrackMux(t *testing.T) {
 	customMux := moqt.NewTrackMux()
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.TrackMux = customMux
 	server.init()
 
@@ -248,7 +319,10 @@ func TestServer_Mux_CustomTrackMux(t *testing.T) {
 
 // TestServer_Close_WithNilComponents tests Close with uninitialized components
 func TestServer_Close_WithNilComponents(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 
 	err := server.Close()
 	require.NoError(t, err, "Close with nil components should not error")
@@ -256,7 +330,10 @@ func TestServer_Close_WithNilComponents(t *testing.T) {
 
 // TestServer_Shutdown_WithNilComponents tests Shutdown with uninitialized components
 func TestServer_Shutdown_WithNilComponents(t *testing.T) {
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	ctx := context.Background()
 
 	err := server.Shutdown(ctx)
@@ -266,7 +343,10 @@ func TestServer_Shutdown_WithNilComponents(t *testing.T) {
 // TestServer_Init_WithQUICConfig tests initialization with QUIC config
 func TestServer_Init_WithQUICConfig(t *testing.T) {
 	quicConfig := &quic.Config{}
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.QUICConfig = quicConfig
 	server.init()
 
@@ -275,9 +355,13 @@ func TestServer_Init_WithQUICConfig(t *testing.T) {
 
 // TestServer_Init_MultipleCallsWithDifferentConfigs tests init idempotency
 func TestServer_Init_MultipleCallsWithDifferentConfigs(t *testing.T) {
-	server := newTestServer(withConfig(&Config{
-		Upstream: "https://first.example.com",
-	}))
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+		Config: &Config{
+			Upstream: "https://first.example.com",
+		},
+	}
 
 	server.init()
 	firstMux := server.TrackMux
@@ -305,7 +389,10 @@ func TestServer_CheckHTTPOrigin(t *testing.T) {
 		return true
 	}
 
-	server := newTestServer()
+	server := &Server{
+		Addr:      "localhost:4433",
+		TLSConfig: &tls.Config{},
+	}
 	server.CheckHTTPOrigin = originFunc
 	server.init()
 
@@ -333,7 +420,10 @@ func TestServer_Address_Formats(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := newTestServer(withAddr(tt.addr))
+			server := &Server{
+				Addr:      tt.addr,
+				TLSConfig: &tls.Config{},
+			}
 			server.init()
 
 			assert.Equal(t, tt.addr, server.Addr, "Address should be preserved")
