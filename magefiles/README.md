@@ -10,7 +10,3 @@ Usage:
   mage <target>
   # optional: mage -d ./magefiles <target>
   ```
-
-Notes:
-- Paths used in the tasks are relative to the repository root (the mage tasks use `..` where appropriate).
-- The original `magefile.go` at the repo root is disabled and kept for history; use the files in this directory instead.
