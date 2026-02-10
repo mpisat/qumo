@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/okdaichi/qumo/relay"
+	"github.com/okdaichi/qumo/internal/relay"
 )
 
 // TestLoadConfig tests the configuration loading

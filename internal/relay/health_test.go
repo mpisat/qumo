@@ -1,4 +1,4 @@
-package health
+package relay
 
 import (
 	"encoding/json"
@@ -9,9 +9,9 @@ import (
 )
 
 func TestHealthChecker_GetStatus(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
-	status := checker.GetStatus()
+	status := checker.getStatus()
 
 	if status.Status != "healthy" {
 		t.Errorf("Expected status 'healthy', got '%s'", status.Status)
@@ -25,31 +25,31 @@ func TestHealthChecker_GetStatus(t *testing.T) {
 }
 
 func TestHealthChecker_ConnectionTracking(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	// Test increment
-	checker.IncrementConnections()
-	checker.IncrementConnections()
-	checker.IncrementConnections()
+	checker.incrementConnections()
+	checker.incrementConnections()
+	checker.incrementConnections()
 
-	status := checker.GetStatus()
+	status := checker.getStatus()
 	if status.ActiveConnections != 3 {
 		t.Errorf("Expected 3 active connections, got %d", status.ActiveConnections)
 	}
 
 	// Test decrement
-	checker.DecrementConnections()
-	status = checker.GetStatus()
+	checker.decrementConnections()
+	status = checker.getStatus()
 	if status.ActiveConnections != 2 {
 		t.Errorf("Expected 2 active connections, got %d", status.ActiveConnections)
 	}
 }
 
 func TestHealthChecker_UpstreamStatus(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	// Initially not connected
-	status := checker.GetStatus()
+	status := checker.getStatus()
 	if status.UpstreamConnected {
 		t.Error("Expected upstream not connected initially")
 	}
@@ -58,8 +58,7 @@ func TestHealthChecker_UpstreamStatus(t *testing.T) {
 	}
 
 	// Mark as connected
-	checker.SetUpstreamConnected(true)
-	status = checker.GetStatus()
+	status = checker.getStatus()
 	if !status.UpstreamConnected {
 		t.Error("Expected upstream connected after setting")
 	}
@@ -70,14 +69,14 @@ func TestHealthChecker_UpstreamStatus(t *testing.T) {
 	// Test degraded status when upstream required but not connected
 	checker.SetUpstreamRequired(true)
 	checker.SetUpstreamConnected(false)
-	status = checker.GetStatus()
+	status = checker.getStatus()
 	if status.Status != "degraded" {
 		t.Errorf("Expected status 'degraded' when upstream required but not connected, got '%s'", status.Status)
 	}
 }
 
 func TestHealthChecker_HTTPEndpoint(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
@@ -99,7 +98,7 @@ func TestHealthChecker_HTTPEndpoint(t *testing.T) {
 }
 
 func TestHealthChecker_HEADRequest(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	req := httptest.NewRequest(http.MethodHead, "/health", nil)
 	w := httptest.NewRecorder()
@@ -117,7 +116,7 @@ func TestHealthChecker_HEADRequest(t *testing.T) {
 }
 
 func TestHealthChecker_InvalidMethod(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/health", nil)
 	w := httptest.NewRecorder()
@@ -130,7 +129,7 @@ func TestHealthChecker_InvalidMethod(t *testing.T) {
 }
 
 func TestHealthChecker_Uptime(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	// Wait a bit
 	time.Sleep(100 * time.Millisecond)
@@ -148,7 +147,7 @@ func TestHealthChecker_Uptime(t *testing.T) {
 }
 
 func TestHealthChecker_ConcurrentAccess(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
@@ -174,7 +173,7 @@ func TestHealthChecker_ConcurrentAccess(t *testing.T) {
 }
 
 func TestHealthChecker_LivenessProbe(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 	w := httptest.NewRecorder()
@@ -196,7 +195,7 @@ func TestHealthChecker_LivenessProbe(t *testing.T) {
 }
 
 func TestHealthChecker_ReadinessProbe_Ready(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 	checker.SetUpstreamConnected(true)
 
 	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
@@ -219,7 +218,7 @@ func TestHealthChecker_ReadinessProbe_Ready(t *testing.T) {
 }
 
 func TestHealthChecker_ReadinessProbe_NotReady_UpstreamRequired(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 	checker.SetUpstreamRequired(true)
 	checker.SetUpstreamConnected(false)
 
@@ -247,7 +246,7 @@ func TestHealthChecker_ReadinessProbe_NotReady_UpstreamRequired(t *testing.T) {
 }
 
 func TestHealthChecker_ReadinessProbe_HEADRequest(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 
 	req := httptest.NewRequest(http.MethodHead, "/health/ready", nil)
 	w := httptest.NewRecorder()
@@ -264,7 +263,7 @@ func TestHealthChecker_ReadinessProbe_HEADRequest(t *testing.T) {
 }
 
 func TestHealthChecker_JSONFormat(t *testing.T) {
-	checker := NewStatusHandler()
+	checker := newStatusHandler()
 	checker.IncrementConnections()
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)

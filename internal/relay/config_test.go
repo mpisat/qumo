@@ -20,9 +20,6 @@ func TestConfigDefaults(t *testing.T) {
 		t.Error("Default FrameCapacity should be 0")
 	}
 
-	if cfg.HealthCheckAddr != "" {
-		t.Error("Default HealthCheckAddr should be empty")
-	}
 }
 
 // TestConfigWithUpstream tests config with upstream URL
@@ -102,39 +99,12 @@ func TestConfigWithFrameCapacity(t *testing.T) {
 	}
 }
 
-// TestConfigWithHealthCheckAddr tests health check address configuration
-func TestConfigWithHealthCheckAddr(t *testing.T) {
-	tests := []struct {
-		name string
-		addr string
-	}{
-		{"port only", ":8080"},
-		{"localhost with port", "localhost:8080"},
-		{"all interfaces", "0.0.0.0:8080"},
-		{"specific IP", "127.0.0.1:8080"},
-		{"IPv6", "[::1]:8080"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{
-				HealthCheckAddr: tt.addr,
-			}
-
-			if cfg.HealthCheckAddr != tt.addr {
-				t.Errorf("Expected HealthCheckAddr=%s, got %s", tt.addr, cfg.HealthCheckAddr)
-			}
-		})
-	}
-}
-
 // TestConfigFullyPopulated tests a fully configured Config
 func TestConfigFullyPopulated(t *testing.T) {
 	cfg := &Config{
-		Upstream:        "https://upstream.example.com:4433",
-		GroupCacheSize:  200,
-		FrameCapacity:   2048,
-		HealthCheckAddr: ":8080",
+		Upstream:       "https://upstream.example.com:4433",
+		GroupCacheSize: 200,
+		FrameCapacity:  2048,
 	}
 
 	if cfg.Upstream != "https://upstream.example.com:4433" {
@@ -149,26 +119,21 @@ func TestConfigFullyPopulated(t *testing.T) {
 		t.Error("FrameCapacity not set correctly")
 	}
 
-	if cfg.HealthCheckAddr != ":8080" {
-		t.Error("HealthCheckAddr not set correctly")
-	}
 }
 
 // TestConfigCopy tests that Config can be copied correctly
 func TestConfigCopy(t *testing.T) {
 	original := &Config{
-		Upstream:        "https://example.com",
-		GroupCacheSize:  100,
-		FrameCapacity:   1024,
-		HealthCheckAddr: ":8080",
+		Upstream:       "https://example.com",
+		GroupCacheSize: 100,
+		FrameCapacity:  1024,
 	}
 
 	// Create a copy
 	copy := &Config{
-		Upstream:        original.Upstream,
-		GroupCacheSize:  original.GroupCacheSize,
-		FrameCapacity:   original.FrameCapacity,
-		HealthCheckAddr: original.HealthCheckAddr,
+		Upstream:       original.Upstream,
+		GroupCacheSize: original.GroupCacheSize,
+		FrameCapacity:  original.FrameCapacity,
 	}
 
 	// Verify all fields match
@@ -180,9 +145,6 @@ func TestConfigCopy(t *testing.T) {
 	}
 	if copy.FrameCapacity != original.FrameCapacity {
 		t.Error("FrameCapacity not copied correctly")
-	}
-	if copy.HealthCheckAddr != original.HealthCheckAddr {
-		t.Error("HealthCheckAddr not copied correctly")
 	}
 
 	// Modify copy and ensure original is unchanged
@@ -233,7 +195,6 @@ func TestConfigStructSize(t *testing.T) {
 	_ = cfg.Upstream
 	_ = cfg.GroupCacheSize
 	_ = cfg.FrameCapacity
-	_ = cfg.HealthCheckAddr
 
 	t.Logf("Config has %d fields - ensure all are tested", expectedFields)
 }

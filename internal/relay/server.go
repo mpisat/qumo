@@ -26,6 +26,8 @@ type Server struct {
 	server *moqt.Server
 
 	initOnce sync.Once
+
+	statusHandler *statusHandler
 }
 
 func (s *Server) init() {
@@ -38,6 +40,12 @@ func (s *Server) init() {
 			s.TrackMux = moqt.DefaultMux
 		}
 	})
+}
+
+func (s *Server) Status() Status {
+	s.init()
+
+	return s.statusHandler.getStatus()
 }
 
 func (s *Server) ListenAndServe() error {
@@ -92,7 +100,6 @@ func (s *Server) ListenAndServe() error {
 			if err != nil {
 				return
 			}
-
 		})
 	}
 

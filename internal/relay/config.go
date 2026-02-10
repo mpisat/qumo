@@ -1,7 +1,5 @@
 package relay
 
-import "github.com/okdaichi/qumo/relay/health"
-
 type Config struct {
 	// Upstream server URL (optional)
 	Upstream string
@@ -11,10 +9,6 @@ type Config struct {
 
 	// FrameCapacity is the frame buffer size in bytes.
 	FrameCapacity int
-
-	// HealthCheckAddr is the address for the health check HTTP server
-	// Example: ":8080" or "0.0.0.0:8080"
-	HealthCheckAddr string
 }
 
 func (c *Config) groupCacheSize() int {
@@ -29,11 +23,4 @@ func (c *Config) frameCapacity() int {
 		return c.FrameCapacity
 	}
 	return DefaultNewFrameCapacity
-}
-
-func (c *Config) healthCheckAddr() string {
-	if c != nil && c.HealthCheckAddr != "" {
-		return c.HealthCheckAddr
-	}
-	return health.DefaultAddress
 }

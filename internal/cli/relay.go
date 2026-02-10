@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -10,12 +11,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
-	"github.com/okdaichi/qumo/relay"
-	"github.com/okdaichi/qumo/relay/health"
+	"github.com/okdaichi/qumo/internal/relay"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/yaml.v3"
 )
@@ -53,14 +52,6 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Create health check handler
-	healthHandler := health.NewStatusHandler()
-
-	// Set upstream required if upstream URL is configured
-	if config.UpstreamURL != "" {
-		healthHandler.SetUpstreamRequired(true)
-	}
-
 	// Create MOQT server
 	server := &relay.Server{
 		Addr:      config.Address,
@@ -75,9 +66,7 @@ func main() {
 	var httpServer *http.Server
 	if config.HealthCheckAddr != "" {
 		mux := http.NewServeMux()
-		mux.HandleFunc("/health", healthHandler.ServeHTTP)
-		mux.HandleFunc("/health/live", healthHandler.ServeLive)
-		mux.HandleFunc("/health/ready", healthHandler.ServeReady)
+		registerHealthHandler(server, mux)
 		mux.Handle("/metrics", promhttp.Handler())
 
 		httpServer = &http.Server{
@@ -174,10 +163,9 @@ func loadConfig(filename string) (*config, error) {
 		UpstreamURL:     ymlConfig.Relay.UpstreamURL,
 		HealthCheckAddr: ymlConfig.Server.HealthCheckAddr,
 		RelayConfig: relay.Config{
-			Upstream:        ymlConfig.Relay.UpstreamURL,
-			FrameCapacity:   ymlConfig.Relay.FrameCapacity,
-			GroupCacheSize:  ymlConfig.Relay.GroupCacheSize,
-			HealthCheckAddr: ymlConfig.Server.HealthCheckAddr,
+			Upstream:       ymlConfig.Relay.UpstreamURL,
+			FrameCapacity:  ymlConfig.Relay.FrameCapacity,
+			GroupCacheSize: ymlConfig.Relay.GroupCacheSize,
 		},
 	}
 
@@ -196,25 +184,99 @@ func setupTLS(certFile, keyFile string) (*tls.Config, error) {
 	}, nil
 }
 
-func getEnv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
-}
-
-func getEnvBool(key string, fallback bool) bool {
-	if value := os.Getenv(key); value != "" {
-		return value == "true" || value == "1"
-	}
-	return fallback
-}
-
-func getEnvFloat(key string, fallback float64) float64 {
-	if value := os.Getenv(key); value != "" {
-		if f, err := strconv.ParseFloat(value, 64); err == nil {
-			return f
+func registerHealthHandler(server *relay.Server, mux *http.ServeMux) {
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
 		}
-	}
-	return fallback
+
+		status := server.Status()
+
+		// Set status code based on health
+		statusCode := http.StatusOK
+		switch status.Status {
+		case "unhealthy":
+			statusCode = http.StatusServiceUnavailable
+		case "degraded":
+			statusCode = http.StatusOK // Still operational, just degraded
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+
+		if r.Method == http.MethodHead {
+			return
+		}
+
+		json.NewEncoder(w).Encode(status)
+	})
+
+	mux.HandleFunc("/health/live", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Liveness: just check if we can respond
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if r.Method == http.MethodHead {
+			return
+		}
+
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "alive",
+		})
+	})
+
+	mux.HandleFunc("/health/ready", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		status := server.Status()
+
+		activeConns := status.ActiveConnections
+		upstreamConn := status.UpstreamConnected
+
+		// Readiness checks
+		ready := true
+		reason := "ready"
+
+		// Check if connections are in valid state
+		if activeConns < 0 {
+			ready = false
+			reason = "invalid_connection_state"
+		}
+
+		// Check upstream if required
+		if server.Config.Upstream != "" && !upstreamConn {
+			ready = false
+			reason = "upstream_not_connected"
+		}
+
+		statusCode := http.StatusOK
+		if !ready {
+			statusCode = http.StatusServiceUnavailable
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+
+		if r.Method == http.MethodHead {
+			return
+		}
+
+		response := map[string]any{
+			"ready": ready,
+		}
+		if !ready {
+			response["reason"] = reason
+		}
+
+		json.NewEncoder(w).Encode(response)
+	})
 }

@@ -274,10 +274,9 @@ func TestServer_Config_WithEmptyUpstream(t *testing.T) {
 // TestServer_Config_CustomValues tests custom config values
 func TestServer_Config_CustomValues(t *testing.T) {
 	customConfig := &Config{
-		Upstream:        "https://example.com",
-		GroupCacheSize:  500,
-		FrameCapacity:   4096,
-		HealthCheckAddr: ":9090",
+		Upstream:       "https://example.com",
+		GroupCacheSize: 500,
+		FrameCapacity:  4096,
 	}
 
 	server := &Server{
@@ -290,7 +289,6 @@ func TestServer_Config_CustomValues(t *testing.T) {
 	assert.Same(t, customConfig, server.Config, "Custom config should be preserved")
 	assert.Equal(t, 500, server.Config.GroupCacheSize, "GroupCacheSize should be preserved")
 	assert.Equal(t, 4096, server.Config.FrameCapacity, "FrameCapacity should be preserved")
-	assert.Equal(t, ":9090", server.Config.HealthCheckAddr, "HealthCheckAddr should be preserved")
 }
 
 // TestServer_Mux_Initialization tests that muxes are properly initialized
