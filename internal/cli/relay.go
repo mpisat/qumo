@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,14 +21,13 @@ import (
 )
 
 type config struct {
-	Address         string
-	CertFile        string
-	KeyFile         string
-	UpstreamURL     string
-	HealthCheckAddr string
-	MetricsAddr     string
-	AdminAddr       string
-	RelayConfig     relay.Config
+	Address     string
+	CertFile    string
+	KeyFile     string
+	UpstreamURL string
+	MetricsAddr string
+	AdminAddr   string
+	RelayConfig relay.Config
 }
 
 func main() {
@@ -46,14 +46,12 @@ func main() {
 		log.Fatalf("Failed to setup TLS: %v", err)
 	}
 
-	slog.Info("Starting qumo-relay server", "address", config.Address)
-
 	// Setup signal handling for graceful shutdown
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Create MOQT server
-	server := &relay.Server{
+	// Create relay relayServer
+	relayServer := &relay.Server{
 		Addr:      config.Address,
 		TLSConfig: tlsConfig,
 		Config:    &config.RelayConfig,
@@ -63,38 +61,37 @@ func main() {
 	}
 
 	// Start health check HTTP server if configured
-	var httpServer *http.Server
-	if config.HealthCheckAddr != "" {
-		mux := http.NewServeMux()
-		registerHealthHandler(server, mux)
-		mux.Handle("/metrics", promhttp.Handler())
-
-		httpServer = &http.Server{
-			Addr:    config.HealthCheckAddr,
-			Handler: mux,
-		}
-
-		go func() {
-			log.Printf("HTTP server starting on %s", config.HealthCheckAddr)
-			log.Println("  /health       - Health check")
-			log.Println("  /health/live  - Liveness probe")
-			log.Println("  /health/ready - Readiness probe")
-			log.Println("  /metrics      - Prometheus metrics")
-			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Printf("HTTP server error: %v", err)
-			}
-		}()
+	httpServer := &http.Server{
+		Addr: config.Address,
 	}
+	http.Handle("/health", &healthHandler{
+		upstreamRequired: config.UpstreamURL != "",
+		statusFunc:       relayServer.Status,
+	})
+	http.Handle("/metrics", promhttp.Handler())
 
-	// Start server in a goroutine
-	go func() {
-		log.Printf("Starting MoQ relay server on %s", config.Address)
-		if err := server.ListenAndServe(); err != nil {
+	var wg sync.WaitGroup
+
+	// Start relay server in a goroutine
+	wg.Go(func() {
+		if err := relayServer.ListenAndServe(); err != nil {
 			log.Printf("Server error: %v", err)
 		}
-	}()
+	})
+
+	wg.Go(func() {
+		if err := httpServer.ListenAndServe(); err != nil {
+			if err == http.ErrServerClosed {
+				return // Normal shutdown
+			}
+			log.Printf("HTTP server error: %v", err)
+		}
+	})
 
 	log.Println("Server started successfully")
+	log.Println("  /             - WebTransport & MoQ endpoint")
+	log.Println("  /health       - Health check (?probe=live|ready)")
+	log.Println("  /metrics      - Prometheus metrics")
 
 	// Wait for shutdown signal
 	<-ctx.Done()
@@ -106,16 +103,14 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 
-	// Shutdown health check server
-	if httpServer != nil {
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Error shutting down health check server: %v", err)
-		}
+	// Shutdown MOQT server
+	if err := relayServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Error during shutdown: %v", err)
 	}
 
-	// Shutdown MOQT server
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Error during shutdown: %v", err)
+	// Shutdown http server
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Error shutting down http server: %v", err)
 	}
 
 	slog.Info("Server stopped")
@@ -124,10 +119,9 @@ func main() {
 func loadConfig(filename string) (*config, error) {
 	type yamlConfig struct {
 		Server struct {
-			Address         string `yaml:"address"`
-			CertFile        string `yaml:"cert_file"`
-			KeyFile         string `yaml:"key_file"`
-			HealthCheckAddr string `yaml:"health_check_addr"`
+			Address  string `yaml:"address"`
+			CertFile string `yaml:"cert_file"`
+			KeyFile  string `yaml:"key_file"`
 		} `yaml:"server"`
 		Relay struct {
 			UpstreamURL    string `yaml:"upstream_url"`
@@ -157,11 +151,10 @@ func loadConfig(filename string) (*config, error) {
 	}
 
 	config := &config{
-		Address:         ymlConfig.Server.Address,
-		CertFile:        ymlConfig.Server.CertFile,
-		KeyFile:         ymlConfig.Server.KeyFile,
-		UpstreamURL:     ymlConfig.Relay.UpstreamURL,
-		HealthCheckAddr: ymlConfig.Server.HealthCheckAddr,
+		Address:     ymlConfig.Server.Address,
+		CertFile:    ymlConfig.Server.CertFile,
+		KeyFile:     ymlConfig.Server.KeyFile,
+		UpstreamURL: ymlConfig.Relay.UpstreamURL,
 		RelayConfig: relay.Config{
 			Upstream:       ymlConfig.Relay.UpstreamURL,
 			FrameCapacity:  ymlConfig.Relay.FrameCapacity,
@@ -184,76 +177,43 @@ func setupTLS(certFile, keyFile string) (*tls.Config, error) {
 	}, nil
 }
 
-func registerHealthHandler(server *relay.Server, mux *http.ServeMux) {
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
+type healthHandler struct {
+	upstreamRequired bool
+	statusFunc       func() relay.Status
+}
 
-		status := server.Status()
+func (h *healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// single handler that supports probes via query param: ?probe=live|ready
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 
-		// Set status code based on health
-		statusCode := http.StatusOK
-		switch status.Status {
-		case "unhealthy":
-			statusCode = http.StatusServiceUnavailable
-		case "degraded":
-			statusCode = http.StatusOK // Still operational, just degraded
-		}
+	probe := r.URL.Query().Get("probe")
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(statusCode)
-
-		if r.Method == http.MethodHead {
-			return
-		}
-
-		json.NewEncoder(w).Encode(status)
-	})
-
-	mux.HandleFunc("/health/live", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Liveness: just check if we can respond
+	switch probe {
+	case "live":
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-
 		if r.Method == http.MethodHead {
 			return
 		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "alive"})
+		return
 
-		json.NewEncoder(w).Encode(map[string]string{
-			"status": "alive",
-		})
-	})
-
-	mux.HandleFunc("/health/ready", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		status := server.Status()
-
+	case "ready":
+		status := h.statusFunc()
 		activeConns := status.ActiveConnections
 		upstreamConn := status.UpstreamConnected
 
-		// Readiness checks
 		ready := true
 		reason := "ready"
 
-		// Check if connections are in valid state
 		if activeConns < 0 {
 			ready = false
 			reason = "invalid_connection_state"
 		}
-
-		// Check upstream if required
-		if server.Config.Upstream != "" && !upstreamConn {
+		if h.upstreamRequired && !upstreamConn {
 			ready = false
 			reason = "upstream_not_connected"
 		}
@@ -265,18 +225,59 @@ func registerHealthHandler(server *relay.Server, mux *http.ServeMux) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
-
 		if r.Method == http.MethodHead {
 			return
 		}
 
-		response := map[string]any{
-			"ready": ready,
-		}
+		response := map[string]any{"ready": ready}
 		if !ready {
 			response["reason"] = reason
 		}
-
 		json.NewEncoder(w).Encode(response)
-	})
+		return
+
+	default:
+		// full status
+		status := h.statusFunc()
+
+		ready := true
+		reason := "ready"
+		if status.ActiveConnections < 0 {
+			ready = false
+			reason = "invalid_connection_state"
+		}
+		if h.upstreamRequired && !status.UpstreamConnected {
+			ready = false
+			reason = "upstream_not_connected"
+		}
+
+		response := map[string]any{
+			"status":             status.Status,
+			"timestamp":          status.Timestamp,
+			"uptime":             status.Uptime,
+			"active_connections": status.ActiveConnections,
+			"upstream_connected": status.UpstreamConnected,
+			"live":               true,
+			"ready":              ready,
+		}
+		if !ready {
+			response["ready_reason"] = reason
+		}
+
+		statusCode := http.StatusOK
+		switch status.Status {
+		case "unhealthy":
+			statusCode = http.StatusServiceUnavailable
+		case "degraded":
+			statusCode = http.StatusOK
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		if r.Method == http.MethodHead {
+			return
+		}
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 }

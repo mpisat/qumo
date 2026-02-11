@@ -39,6 +39,8 @@ func (s *Server) init() {
 		if s.TrackMux == nil {
 			s.TrackMux = moqt.DefaultMux
 		}
+
+		s.statusHandler = newStatusHandler()
 	})
 }
 
@@ -68,7 +70,7 @@ func (s *Server) ListenAndServe() error {
 
 			defer downstream.CloseWithError(moqt.NoError, moqt.SessionErrorText(moqt.NoError))
 
-			err = Relay(ctx, downstream, s.TrackMux)
+			err = s.Relay(ctx, downstream, s.TrackMux)
 
 			if err != nil {
 				slog.Error("relay session ended", "err", err)
@@ -96,19 +98,12 @@ func (s *Server) ListenAndServe() error {
 
 			defer upstream.CloseWithError(moqt.NoError, moqt.SessionErrorText(moqt.NoError))
 
-			err = Relay(ctx, upstream, s.TrackMux)
+			err = s.Relay(ctx, upstream, s.TrackMux)
 			if err != nil {
 				return
 			}
 		})
 	}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		err := s.server.HandleWebTransport(w, r)
-		if err != nil {
-			slog.Error("failed to handle web transport", "err", err)
-		}
-	})
 
 	// Start server - this will block until server closes
 	err := s.server.ListenAndServe()
@@ -117,6 +112,12 @@ func (s *Server) ListenAndServe() error {
 	wg.Wait()
 
 	return err
+}
+
+func (s *Server) HandleWebTransport(w http.ResponseWriter, r *http.Request) error {
+	s.init()
+
+	return s.server.HandleWebTransport(w, r)
 }
 
 func (s *Server) Close() error {
@@ -168,6 +169,34 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+	}
+
+	return nil
+}
+
+func (s *Server) Relay(ctx context.Context, sess *moqt.Session, mux *moqt.TrackMux) error {
+	if s.statusHandler != nil {
+		s.statusHandler.incrementConnections()
+		defer s.statusHandler.decrementConnections()
+	}
+
+	// TODO: measure accept time
+	peer, err := sess.AcceptAnnounce("/")
+	if err != nil {
+		return err
+	}
+
+	for ann := range peer.Announcements(ctx) {
+
+		handler := &RelayHandler{
+			Announcement:   ann,
+			Session:        sess,
+			GroupCacheSize: DefaultGroupCacheSize,
+			FramePool:      DefaultFramePool,
+			relaying:       make(map[moqt.TrackName]*trackDistributor),
+		}
+
+		mux.Announce(ann, handler)
 	}
 
 	return nil

@@ -12,30 +12,6 @@ import (
 // Optimized timeout for best CPU/latency tradeoff (based on benchmarks)
 var NotifyTimeout = 1 * time.Millisecond
 
-func Relay(ctx context.Context, sess *moqt.Session, mux *moqt.TrackMux) error {
-
-	// TODO: measure accept time
-	peer, err := sess.AcceptAnnounce("/")
-	if err != nil {
-		return err
-	}
-
-	for ann := range peer.Announcements(ctx) {
-
-		handler := &RelayHandler{
-			Announcement:   ann,
-			Session:        sess,
-			GroupCacheSize: DefaultGroupCacheSize,
-			FramePool:      DefaultFramePool,
-			relaying:       make(map[moqt.TrackName]*trackDistributor),
-		}
-
-		mux.Announce(ann, handler)
-	}
-
-	return nil
-}
-
 var _ moqt.TrackHandler = (*RelayHandler)(nil)
 
 type RelayHandler struct {
