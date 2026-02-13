@@ -81,12 +81,11 @@ func Build() error {
 	}
 
 	// Ensure build directory exists
-	if err := os.MkdirAll("../bin", 0755); err != nil {
+	if err := os.MkdirAll("bin", 0755); err != nil {
 		return err
 	}
 
 	cmd := exec.Command("go", "build", "-o", "./bin/"+binaryName, ".")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -102,7 +101,6 @@ func Install() error {
 	fmt.Println("📦 Installing qumo to $GOPATH/bin...")
 
 	cmd := exec.Command("go", "install", ".")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -120,7 +118,6 @@ func Test() error {
 	fmt.Println("🧪 Running tests...")
 
 	cmd := exec.Command("go", "test", "./...", "-count=1")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -131,7 +128,6 @@ func TestVerbose() error {
 	fmt.Println("🧪 Running tests (verbose)...")
 
 	cmd := exec.Command("go", "test", "./...", "-v", "-count=1")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -142,7 +138,6 @@ func Fmt() error {
 	fmt.Println("✨ Formatting code...")
 
 	cmd := exec.Command("go", "fmt", "./...")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -153,7 +148,6 @@ func Vet() error {
 	fmt.Println("🔍 Running go vet...")
 
 	cmd := exec.Command("go", "vet", "./...")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -171,7 +165,6 @@ func Lint() error {
 	}
 
 	cmd := exec.Command("golangci-lint", "run", "./...")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -195,7 +188,6 @@ func Relay() error {
 	fmt.Println()
 
 	cmd := exec.Command("go", "run", ".", "relay", "-config", "config.relay.yaml")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -217,7 +209,6 @@ func SDN() error {
 	fmt.Println()
 
 	cmd := exec.Command("go", "run", ".", "sdn", "-config", "config.sdn.yaml")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -257,7 +248,7 @@ func Web() error {
 	fmt.Println()
 
 	// Start Vite dev server in the solid-deno project
-	webDir := "../solid-deno"
+	webDir := "solid-deno"
 	cmd := exec.Command("npm", "run", "dev")
 	cmd.Dir = webDir
 	cmd.Stdout = os.Stdout
@@ -270,7 +261,7 @@ func WebBuild() error {
 	fmt.Println("🔨 Building web demo...")
 
 	cmd := exec.Command("npm", "run", "build")
-	cmd.Dir = "../solid-deno"
+	cmd.Dir = "solid-deno"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -279,7 +270,7 @@ func WebBuild() error {
 // WebClean cleans web build artifacts
 func WebClean() error {
 	fmt.Println("🧹 Cleaning web artifacts...")
-	return sh.Rm("../solid-deno/dist")
+	return sh.Rm("solid-deno/dist")
 }
 
 // Cert generates TLS certificates using mkcert
@@ -298,7 +289,7 @@ func Cert() error {
 	}
 
 	// Ensure certs directory exists
-	if err := os.MkdirAll("../certs", 0755); err != nil {
+	if err := os.MkdirAll("certs", 0755); err != nil {
 		return err
 	}
 
@@ -314,8 +305,8 @@ func Cert() error {
 	// Generate certificates for localhost
 	fmt.Println("📝 Generating certificates for localhost...")
 	certCmd := exec.Command("mkcert",
-		"-cert-file", "../certs/server.crt",
-		"-key-file", "../certs/server.key",
+		"-cert-file", "certs/server.crt",
+		"-key-file", "certs/server.key",
 		"localhost", "127.0.0.1", "::1")
 	certCmd.Stdout = os.Stdout
 	certCmd.Stderr = os.Stderr
@@ -342,7 +333,7 @@ func Cert() error {
 // computeCertHash reads the PEM certificate at certs/server.crt, computes
 // the SHA-256 hex fingerprint and returns it as a lower-case hex string.
 func computeCertHash() (string, error) {
-	b, err := os.ReadFile("../certs/server.crt")
+	b, err := os.ReadFile("certs/server.crt")
 	if err != nil {
 		return "", fmt.Errorf("failed to read cert: %w", err)
 	}
@@ -438,7 +429,7 @@ func Hash() error {
 func Clean() error {
 	fmt.Println("🧹 Cleaning build artifacts...")
 
-	if err := sh.Rm("../bin"); err != nil {
+	if err := sh.Rm("bin"); err != nil {
 		fmt.Println("⚠️  No bin directory to clean")
 	} else {
 		fmt.Println("   Removed: bin/")
@@ -472,12 +463,11 @@ func (Nomad) Build() error {
 	}
 
 	// Ensure build directory exists
-	if err := os.MkdirAll("../bin", 0755); err != nil {
+	if err := os.MkdirAll("bin", 0755); err != nil {
 		return err
 	}
 
 	cmd := exec.Command("go", "build", "-o", "./bin/"+binaryName, ".")
-	cmd.Dir = ".."
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -494,7 +484,7 @@ func (Nomad) Up() error {
 	mg.Deps(Nomad.Build)
 
 	fmt.Println("🚀 Submitting Job to Nomad...")
-	cmd := exec.Command("nomad", "job", "run", "../moq-relay.nomad")
+	cmd := exec.Command("nomad", "job", "run", "moq-relay.nomad")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -533,5 +523,5 @@ func (Nomad) Clean() error {
 	// Optionally stop the job first
 	_ = Nomad{}.Stop()
 	time.Sleep(1 * time.Second)
-	return sh.Rm("../bin")
+	return sh.Rm("bin")
 }
