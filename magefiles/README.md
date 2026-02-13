@@ -4,14 +4,7 @@ This directory contains the project's Mage tasks and a dedicated `go.mod` so Mag
 
 ## Quick Start
 
-First, create your configuration files:
-```bash
-# Copy example configs to actual config files
-cp config.sdn.example.yaml config.sdn.yaml
-cp config.relay.example.yaml config.relay.yaml
-```
-
-Then run mage tasks from the repo root:
+Run mage tasks from the repo root:
 ```bash
 # Build the binary
 mage build

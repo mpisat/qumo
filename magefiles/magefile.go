@@ -181,7 +181,7 @@ func Check() error {
 // Relay starts the qumo-relay server
 func Relay() error {
 	fmt.Println("📡 Starting qumo relay server...")
-	fmt.Println("   Config: ./config.relay.yaml (see config.relay.example.yaml)")
+	fmt.Println("   Config: ./config.relay.yaml")
 	fmt.Println("   Certs: certs/server.crt, certs/server.key (run 'mage cert')")
 	fmt.Println("   MoQT: https://localhost:4433")
 	fmt.Println("   HTTP: http://localhost:8080")
@@ -196,7 +196,7 @@ func Relay() error {
 // SDN starts the SDN controller
 func SDN() error {
 	fmt.Println("🎛️  Starting SDN controller...")
-	fmt.Println("   Config: ./config.sdn.yaml (see config.sdn.example.yaml)")
+	fmt.Println("   Config: ./config.sdn.yaml")
 	fmt.Println("   HTTP: http://localhost:8090")
 	fmt.Println()
 	fmt.Println("   Available endpoints:")

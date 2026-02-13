@@ -1,5 +1,4 @@
-# Example configuration for qumo SDN controller
-# Copy this file to config.sdn.yaml and modify as needed
+# Configuration for qumo SDN controller
 
 graph:
   # HTTP API listen address
