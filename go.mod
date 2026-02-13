@@ -1,6 +1,6 @@
 module github.com/okdaichi/qumo
 
-go 1.25.0
+go 1.26
 
 require (
 	github.com/okdaichi/gomoqt v0.10.3

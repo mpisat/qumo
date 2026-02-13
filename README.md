@@ -515,7 +515,7 @@ graph LR
 
 ## Development
 
-**Requirements:** Go 1.21+, Node.js 18+ (for web demo)
+**Requirements:** Go 1.26+, Node.js 18+ (for web demo)
 
 ```bash
 # Run tests
