@@ -3,7 +3,6 @@ package relay
 import (
 	"context"
 	"crypto/tls"
-	"log"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -22,12 +21,16 @@ type Server struct {
 
 	TrackMux *moqt.TrackMux
 
-	client *moqt.Client
+	// AnnounceRegistrar pushes announcements to the SDN controller.
+	// If nil, auto-announce is disabled.
+	AnnounceRegistrar AnnounceRegistrar
+
 	server *moqt.Server
 
 	initOnce sync.Once
 
 	statusHandler *statusHandler
+	peerRegistry  *peerRegistry
 }
 
 func (s *Server) init() {
@@ -41,6 +44,7 @@ func (s *Server) init() {
 		}
 
 		s.statusHandler = newStatusHandler()
+		s.peerRegistry = newPeerRegistry()
 	})
 }
 
@@ -70,7 +74,7 @@ func (s *Server) ListenAndServe() error {
 
 			defer downstream.CloseWithError(moqt.NoError, moqt.SessionErrorText(moqt.NoError))
 
-			err = s.Relay(ctx, downstream, s.TrackMux)
+			err = s.Relay(ctx, downstream)
 
 			if err != nil {
 				slog.Error("relay session ended", "err", err)
@@ -79,39 +83,8 @@ func (s *Server) ListenAndServe() error {
 		}),
 	}
 
-	var wg sync.WaitGroup
-
-	// Only connect to upstream if URL is provided
-	if s.Config.Upstream != "" {
-		s.client = &moqt.Client{
-			TLSConfig:  s.TLSConfig,
-			QUICConfig: s.QUICConfig,
-		}
-
-		wg.Go(func() {
-			upstream, err := s.client.Dial(ctx, s.Config.Upstream, s.TrackMux)
-			if err != nil {
-				log.Printf("Failed to connect to upstream: %v", err)
-				return
-			}
-			log.Printf("Connected to upstream: %s", s.Config.Upstream)
-
-			defer upstream.CloseWithError(moqt.NoError, moqt.SessionErrorText(moqt.NoError))
-
-			err = s.Relay(ctx, upstream, s.TrackMux)
-			if err != nil {
-				return
-			}
-		})
-	}
-
 	// Start server - this will block until server closes
-	err := s.server.ListenAndServe()
-
-	// Wait for upstream goroutine to finish (if it was started)
-	wg.Wait()
-
-	return err
+	return s.server.ListenAndServe()
 }
 
 func (s *Server) HandleWebTransport(w http.ResponseWriter, r *http.Request) error {
@@ -126,10 +99,6 @@ func (s *Server) Close() error {
 
 	if s.server != nil {
 		_ = s.server.Close()
-	}
-
-	if s.client != nil {
-		_ = s.client.Close()
 	}
 
 	return nil
@@ -155,29 +124,19 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 	}
 
-	if s.client != nil {
-		done := make(chan error, 1)
-		go func() {
-			done <- s.client.Shutdown(ctx)
-		}()
-
-		select {
-		case err := <-done:
-			if err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
 	return nil
 }
 
-func (s *Server) Relay(ctx context.Context, sess *moqt.Session, mux *moqt.TrackMux) error {
+func (s *Server) Relay(ctx context.Context, sess *moqt.Session) error {
 	if s.statusHandler != nil {
 		s.statusHandler.incrementConnections()
 		defer s.statusHandler.decrementConnections()
+	}
+
+	// Register peer for topology tracking
+	if s.peerRegistry != nil {
+		peerID := s.peerRegistry.register(sess)
+		defer s.peerRegistry.deregister(peerID)
 	}
 
 	// TODO: measure accept time
@@ -187,6 +146,10 @@ func (s *Server) Relay(ctx context.Context, sess *moqt.Session, mux *moqt.TrackM
 	}
 
 	for ann := range peer.Announcements(ctx) {
+		// Push to SDN announce table if configured
+		if s.AnnounceRegistrar != nil {
+			s.AnnounceRegistrar.Register(string(ann.BroadcastPath()))
+		}
 
 		handler := &RelayHandler{
 			Announcement:   ann,
@@ -196,7 +159,7 @@ func (s *Server) Relay(ctx context.Context, sess *moqt.Session, mux *moqt.TrackM
 			relaying:       make(map[moqt.TrackName]*trackDistributor),
 		}
 
-		mux.Announce(ann, handler)
+		s.TrackMux.Announce(ann, handler)
 	}
 
 	return nil

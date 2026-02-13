@@ -12,26 +12,8 @@ func TestNewStatusHandler(t *testing.T) {
 	if h == nil {
 		t.Fatal("newStatusHandler returned nil")
 	}
-	if h.upstreamRequired != false {
-		t.Errorf("expected upstreamRequired to be false, got %v", h.upstreamRequired)
-	}
 	if h.activeConnections.Load() != 0 {
 		t.Errorf("expected activeConnections to be 0, got %d", h.activeConnections.Load())
-	}
-	if h.upstreamConnected.Load() != false {
-		t.Errorf("expected upstreamConnected to be false, got %v", h.upstreamConnected.Load())
-	}
-}
-
-func TestStatusHandler_SetUpstreamRequired(t *testing.T) {
-	h := newStatusHandler()
-	h.SetUpstreamRequired(true)
-	if !h.upstreamRequired {
-		t.Error("expected upstreamRequired to be true")
-	}
-	h.SetUpstreamRequired(false)
-	if h.upstreamRequired {
-		t.Error("expected upstreamRequired to be false")
 	}
 }
 
@@ -60,25 +42,8 @@ func TestStatusHandler_GetStatus(t *testing.T) {
 	if status.ActiveConnections != 0 {
 		t.Errorf("expected activeConnections to be 0, got %d", status.ActiveConnections)
 	}
-	if status.UpstreamConnected != false {
-		t.Errorf("expected upstreamConnected to be false, got %v", status.UpstreamConnected)
-	}
 	if status.Uptime == "" {
 		t.Error("expected uptime to be set")
-	}
-
-	// Test with upstream required but not connected
-	h.SetUpstreamRequired(true)
-	status = h.getStatus()
-	if status.Status != "degraded" {
-		t.Errorf("expected status to be degraded, got %s", status.Status)
-	}
-
-	// Connect upstream
-	h.upstreamConnected.Store(true)
-	status = h.getStatus()
-	if status.Status != "healthy" {
-		t.Errorf("expected status to be healthy, got %s", status.Status)
 	}
 }
 
@@ -121,24 +86,6 @@ func TestStatusHandler_ServeHTTP(t *testing.T) {
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected status code 405, got %d", w.Code)
-	}
-
-	// Test degraded status
-	h.SetUpstreamRequired(true)
-	req = httptest.NewRequest(http.MethodGet, "/status", nil)
-	w = httptest.NewRecorder()
-	h.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status code 200 for degraded, got %d", w.Code)
-	}
-
-	var status2 Status
-	if err := json.NewDecoder(w.Body).Decode(&status2); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if status2.Status != "degraded" {
-		t.Errorf("expected status degraded, got %s", status2.Status)
 	}
 }
 

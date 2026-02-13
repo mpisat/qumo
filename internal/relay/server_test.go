@@ -49,7 +49,8 @@ func TestServer_Init(t *testing.T) {
 			Addr:      "localhost:4433",
 			TLSConfig: &tls.Config{},
 			Config: &Config{
-				Upstream:       "https://upstream.example.com",
+				NodeID:         "node-1",
+				Region:         "us-west",
 				FrameCapacity:  2000,
 				GroupCacheSize: 200,
 			},
@@ -176,7 +177,8 @@ func TestServer_Init_WithNilTLSConfig(t *testing.T) {
 // TestServer_Config_Persistence tests that provided config is preserved
 func TestServer_Config_Persistence(t *testing.T) {
 	customConfig := &Config{
-		Upstream:       "https://test.example.com",
+		NodeID:         "node-1",
+		Region:         "us-west",
 		FrameCapacity:  5000,
 		GroupCacheSize: 500,
 	}
@@ -189,7 +191,8 @@ func TestServer_Config_Persistence(t *testing.T) {
 	server.init()
 
 	assert.Same(t, customConfig, server.Config, "Server should preserve custom config")
-	assert.Equal(t, "https://test.example.com", server.Config.Upstream)
+	assert.Equal(t, "node-1", server.Config.NodeID)
+	assert.Equal(t, "us-west", server.Config.Region)
 	assert.Equal(t, 5000, server.Config.FrameCapacity)
 	assert.Equal(t, 500, server.Config.GroupCacheSize)
 }
@@ -243,38 +246,11 @@ func TestServer_Shutdown_Idempotent(t *testing.T) {
 	require.NoError(t, server.Shutdown(ctx), "Third Shutdown should not error")
 }
 
-// TestServer_Config_WithUpstream tests server initialization with upstream
-func TestServer_Config_WithUpstream(t *testing.T) {
-	server := &Server{
-		Addr:      "localhost:4433",
-		TLSConfig: &tls.Config{},
-		Config: &Config{
-			Upstream: "https://upstream.example.com:4433",
-		},
-	}
-	server.init()
-
-	assert.Equal(t, "https://upstream.example.com:4433", server.Config.Upstream, "Upstream config should be preserved")
-}
-
-// TestServer_Config_WithEmptyUpstream tests server with empty upstream
-func TestServer_Config_WithEmptyUpstream(t *testing.T) {
-	server := &Server{
-		Addr:      "localhost:4433",
-		TLSConfig: &tls.Config{},
-		Config: &Config{
-			Upstream: "",
-		},
-	}
-	server.init()
-
-	assert.Empty(t, server.Config.Upstream, "Empty upstream should remain empty")
-}
-
 // TestServer_Config_CustomValues tests custom config values
 func TestServer_Config_CustomValues(t *testing.T) {
 	customConfig := &Config{
-		Upstream:       "https://example.com",
+		NodeID:         "node-1",
+		Region:         "us-west",
 		GroupCacheSize: 500,
 		FrameCapacity:  4096,
 	}
@@ -357,7 +333,7 @@ func TestServer_Init_MultipleCallsWithDifferentConfigs(t *testing.T) {
 		Addr:      "localhost:4433",
 		TLSConfig: &tls.Config{},
 		Config: &Config{
-			Upstream: "https://first.example.com",
+			NodeID: "node-1",
 		},
 	}
 
@@ -367,7 +343,7 @@ func TestServer_Init_MultipleCallsWithDifferentConfigs(t *testing.T) {
 	// Try to change config and init again
 	// Because of sync.Once, init() does nothing on second call
 	server.Config = &Config{
-		Upstream: "https://second.example.com",
+		NodeID: "node-2",
 	}
 	server.init()
 
@@ -376,7 +352,7 @@ func TestServer_Init_MultipleCallsWithDifferentConfigs(t *testing.T) {
 	assert.Same(t, firstMux, server.TrackMux, "TrackMux should not change on second init call")
 
 	// Config field is not protected by init(), so it changes
-	assert.Equal(t, "https://second.example.com", server.Config.Upstream, "Config assignment should work even after init")
+	assert.Equal(t, "node-2", server.Config.NodeID, "Config assignment should work even after init")
 }
 
 // TestServer_CheckHTTPOrigin tests CheckHTTPOrigin configuration

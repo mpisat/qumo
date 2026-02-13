@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -11,11 +11,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
+	"github.com/okdaichi/gomoqt/moqt"
 	"github.com/okdaichi/qumo/internal/relay"
+	"github.com/okdaichi/qumo/internal/sdn"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/yaml.v3"
 )
@@ -24,26 +25,27 @@ type config struct {
 	Address     string
 	CertFile    string
 	KeyFile     string
-	UpstreamURL string
 	MetricsAddr string
 	AdminAddr   string
 	RelayConfig relay.Config
+	SDNConfig   *sdn.ClientConfig // nil if auto-announce is disabled
 }
 
-func main() {
-	var configFile = flag.String("config", "configs/config.yaml", "path to config file")
-	flag.Parse()
+func RunRelay(args []string) error {
+	fs := flag.NewFlagSet("relay", flag.ExitOnError)
+	var configFile = fs.String("config", "config.relay.yaml", "path to config file")
+	fs.Parse(args)
 
 	// Load configuration
 	config, err := loadConfig(*configFile)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Setup TLS
 	tlsConfig, err := setupTLS(config.CertFile, config.KeyFile)
 	if err != nil {
-		log.Fatalf("Failed to setup TLS: %v", err)
+		return fmt.Errorf("failed to setup TLS: %w", err)
 	}
 
 	// Setup signal handling for graceful shutdown
@@ -51,65 +53,100 @@ func main() {
 	defer cancel()
 
 	// Create relay relayServer
+	trackMux := moqt.NewTrackMux()
 	relayServer := &relay.Server{
 		Addr:      config.Address,
 		TLSConfig: tlsConfig,
 		Config:    &config.RelayConfig,
+		TrackMux:  trackMux,
 		CheckHTTPOrigin: func(r *http.Request) bool {
 			return true //TODO:
 		},
 	}
 
-	// Start health check HTTP server if configured
-	httpServer := &http.Server{
-		Addr: config.Address,
+	// Set up SDN auto-announce client if configured
+	if config.SDNConfig != nil {
+		var err error
+		sdnClient, err := sdn.NewClient(*config.SDNConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create SDN client: %w", err)
+		}
+		relayServer.AnnounceRegistrar = sdnClient
+		go sdnClient.Run(ctx)
+
+		// Start remote fetcher to discover and subscribe to remote broadcasts
+		fetcher := &relay.RemoteFetcher{
+			SDNClient:      sdnClient,
+			TrackMux:       trackMux,
+			TLSConfig:      tlsConfig,
+			GroupCacheSize: config.RelayConfig.GroupCacheSize,
+		}
+		go fetcher.Run(ctx)
 	}
-	http.Handle("/health", &healthHandler{
-		upstreamRequired: config.UpstreamURL != "",
-		statusFunc:       relayServer.Status,
+
+	mux := http.NewServeMux()
+	mux.Handle("/health", &healthHandler{
+		statusFunc: relayServer.Status,
 	})
-	http.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.Handler())
 
-	var wg sync.WaitGroup
+	httpServer := &http.Server{
+		Addr:    config.Address,
+		Handler: mux,
+	}
 
-	// Start relay server in a goroutine
-	wg.Go(func() {
-		if err := relayServer.ListenAndServe(); err != nil {
+	// Delegate to testable helper that runs servers until ctx is cancelled
+	serveComponents(ctx, relayServer, httpServer, 10*time.Second)
+
+	return nil
+}
+
+// serverRunner is a minimal interface implemented by both *relay.Server and
+// *http.Server so we can unit-test the run/shutdown flow with fakes.
+type serverRunner interface {
+	ListenAndServe() error
+	Shutdown(ctx context.Context) error
+}
+
+// serveComponents starts the provided servers and blocks until ctx is cancelled.
+// It intentionally mirrors the previous RunRelay behavior: ListenAndServe
+// errors are logged but do not abort the shutdown sequence.
+func serveComponents(ctx context.Context, relaySrv serverRunner, httpSrv serverRunner, shutdownTimeout time.Duration) {
+	// Start servers (errors from ListenAndServe are logged but ignored here)
+	go func() {
+		if err := relaySrv.ListenAndServe(); err != nil {
 			log.Printf("Server error: %v", err)
 		}
-	})
+	}()
 
-	wg.Go(func() {
-		if err := httpServer.ListenAndServe(); err != nil {
+	go func() {
+		if err := httpSrv.ListenAndServe(); err != nil {
 			if err == http.ErrServerClosed {
 				return // Normal shutdown
 			}
 			log.Printf("HTTP server error: %v", err)
 		}
-	})
+	}()
 
 	log.Println("Server started successfully")
 	log.Println("  /             - WebTransport & MoQ endpoint")
 	log.Println("  /health       - Health check (?probe=live|ready)")
 	log.Println("  /metrics      - Prometheus metrics")
 
-	// Wait for shutdown signal
+	// Wait for cancellation
 	<-ctx.Done()
-	cancel() // Stop listening for signals, so next Ctrl+C kills the program
 
 	slog.Info("Shutting down server...")
 
 	// Graceful shutdown with timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
 
-	// Shutdown MOQT server
-	if err := relayServer.Shutdown(shutdownCtx); err != nil {
+	if err := relaySrv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Error during shutdown: %v", err)
 	}
 
-	// Shutdown http server
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Error shutting down http server: %v", err)
 	}
 
@@ -124,10 +161,21 @@ func loadConfig(filename string) (*config, error) {
 			KeyFile  string `yaml:"key_file"`
 		} `yaml:"server"`
 		Relay struct {
-			UpstreamURL    string `yaml:"upstream_url"`
+			NodeID         string `yaml:"node_id"`
+			Region         string `yaml:"region"`
 			GroupCacheSize int    `yaml:"group_cache_size"`
 			FrameCapacity  int    `yaml:"frame_capacity"`
 		} `yaml:"relay"`
+		SDN *struct {
+			URL               string `yaml:"url"`
+			RelayName         string `yaml:"relay_name"`
+			HeartbeatInterval int    `yaml:"heartbeat_interval_sec"`
+			TLS               *struct {
+				CertFile string `yaml:"cert_file"`
+				KeyFile  string `yaml:"key_file"`
+				CAFile   string `yaml:"ca_file"`
+			} `yaml:"tls"`
+		} `yaml:"sdn"`
 	}
 
 	file, err := os.Open(filename)
@@ -151,15 +199,37 @@ func loadConfig(filename string) (*config, error) {
 	}
 
 	config := &config{
-		Address:     ymlConfig.Server.Address,
-		CertFile:    ymlConfig.Server.CertFile,
-		KeyFile:     ymlConfig.Server.KeyFile,
-		UpstreamURL: ymlConfig.Relay.UpstreamURL,
+		Address:  ymlConfig.Server.Address,
+		CertFile: ymlConfig.Server.CertFile,
+		KeyFile:  ymlConfig.Server.KeyFile,
 		RelayConfig: relay.Config{
-			Upstream:       ymlConfig.Relay.UpstreamURL,
+			NodeID:         ymlConfig.Relay.NodeID,
+			Region:         ymlConfig.Relay.Region,
 			FrameCapacity:  ymlConfig.Relay.FrameCapacity,
 			GroupCacheSize: ymlConfig.Relay.GroupCacheSize,
 		},
+	}
+
+	// Parse optional SDN auto-announce config
+	if ymlConfig.SDN != nil && ymlConfig.SDN.URL != "" {
+		sdnCfg := &sdn.ClientConfig{
+			URL:       ymlConfig.SDN.URL,
+			RelayName: ymlConfig.SDN.RelayName,
+		}
+		if sdnCfg.RelayName == "" {
+			sdnCfg.RelayName = ymlConfig.Relay.NodeID
+		}
+		if ymlConfig.SDN.HeartbeatInterval > 0 {
+			sdnCfg.HeartbeatInterval = time.Duration(ymlConfig.SDN.HeartbeatInterval) * time.Second
+		}
+		if ymlConfig.SDN.TLS != nil {
+			sdnCfg.TLS = &sdn.TLSConfig{
+				CertFile: ymlConfig.SDN.TLS.CertFile,
+				KeyFile:  ymlConfig.SDN.TLS.KeyFile,
+				CAFile:   ymlConfig.SDN.TLS.CAFile,
+			}
+		}
+		config.SDNConfig = sdnCfg
 	}
 
 	return config, nil
@@ -178,8 +248,7 @@ func setupTLS(certFile, keyFile string) (*tls.Config, error) {
 }
 
 type healthHandler struct {
-	upstreamRequired bool
-	statusFunc       func() relay.Status
+	statusFunc func() relay.Status
 }
 
 func (h *healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +273,6 @@ func (h *healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "ready":
 		status := h.statusFunc()
 		activeConns := status.ActiveConnections
-		upstreamConn := status.UpstreamConnected
 
 		ready := true
 		reason := "ready"
@@ -212,10 +280,6 @@ func (h *healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if activeConns < 0 {
 			ready = false
 			reason = "invalid_connection_state"
-		}
-		if h.upstreamRequired && !upstreamConn {
-			ready = false
-			reason = "upstream_not_connected"
 		}
 
 		statusCode := http.StatusOK
@@ -246,17 +310,12 @@ func (h *healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ready = false
 			reason = "invalid_connection_state"
 		}
-		if h.upstreamRequired && !status.UpstreamConnected {
-			ready = false
-			reason = "upstream_not_connected"
-		}
 
 		response := map[string]any{
 			"status":             status.Status,
 			"timestamp":          status.Timestamp,
 			"uptime":             status.Uptime,
 			"active_connections": status.ActiveConnections,
-			"upstream_connected": status.UpstreamConnected,
 			"live":               true,
 			"ready":              ready,
 		}
@@ -265,11 +324,8 @@ func (h *healthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		statusCode := http.StatusOK
-		switch status.Status {
-		case "unhealthy":
+		if status.Status == "unhealthy" {
 			statusCode = http.StatusServiceUnavailable
-		case "degraded":
-			statusCode = http.StatusOK
 		}
 
 		w.Header().Set("Content-Type", "application/json")

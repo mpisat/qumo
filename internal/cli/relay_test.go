@@ -1,11 +1,19 @@
-package main
+package cli
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/okdaichi/qumo/internal/relay"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestLoadConfig tests the configuration loading
@@ -20,7 +28,6 @@ server:
   cert_file: "certs/cert.pem"
   key_file: "certs/key.pem"
 relay:
-  upstream_url: "https://upstream.example.com:4433"
   group_cache_size: 150
   frame_capacity: 2000
 `
@@ -43,9 +50,6 @@ relay:
 	if cfg.KeyFile != "certs/key.pem" {
 		t.Errorf("Expected key_file 'certs/key.pem', got '%s'", cfg.KeyFile)
 	}
-	if cfg.UpstreamURL != "https://upstream.example.com:4433" {
-		t.Errorf("Expected upstream_url 'https://upstream.example.com:4433', got '%s'", cfg.UpstreamURL)
-	}
 	if cfg.RelayConfig.GroupCacheSize != 150 {
 		t.Errorf("Expected GroupCacheSize 150, got %d", cfg.RelayConfig.GroupCacheSize)
 	}
@@ -65,8 +69,7 @@ server:
   address: "localhost:4433"
   cert_file: "certs/cert.pem"
   key_file: "certs/key.pem"
-relay:
-  upstream_url: "https://upstream.example.com:4433"
+relay: {}
 `
 
 	if err := os.WriteFile(configFile, []byte(minimalConfig), 0644); err != nil {
@@ -176,7 +179,6 @@ server:
   cert_file: "/path/to/cert.pem"
   key_file: "/path/to/key.pem"
 relay:
-  upstream_url: "https://relay.example.com:8443"
   group_cache_size: 500
   frame_capacity: 5000
 `
@@ -200,14 +202,8 @@ relay:
 	if cfg.KeyFile != "/path/to/key.pem" {
 		t.Errorf("KeyFile not properly mapped")
 	}
-	if cfg.UpstreamURL != "https://relay.example.com:8443" {
-		t.Errorf("UpstreamURL not properly mapped")
-	}
 
 	// Verify RelayConfig is properly populated
-	if cfg.RelayConfig.Upstream != "https://relay.example.com:8443" {
-		t.Errorf("RelayConfig.Upstream not properly mapped")
-	}
 	if cfg.RelayConfig.GroupCacheSize != 500 {
 		t.Errorf("RelayConfig.GroupCacheSize not properly mapped")
 	}
@@ -225,7 +221,6 @@ func TestLoadConfigZeroValues(t *testing.T) {
 server:
   address: "localhost:4433"
 relay:
-  upstream_url: "https://upstream.example.com"
   group_cache_size: 0
   frame_capacity: 0
 `
@@ -267,12 +262,10 @@ func TestSetupTLSEmptyPaths(t *testing.T) {
 // TestConfigType tests the config type structure
 func TestConfigType(t *testing.T) {
 	cfg := &config{
-		Address:     "localhost:4433",
-		CertFile:    "cert.pem",
-		KeyFile:     "key.pem",
-		UpstreamURL: "https://upstream.example.com",
+		Address:  "localhost:4433",
+		CertFile: "cert.pem",
+		KeyFile:  "key.pem",
 		RelayConfig: relay.Config{
-			Upstream:       "https://upstream.example.com",
 			FrameCapacity:  1500,
 			GroupCacheSize: 100,
 		},
@@ -300,7 +293,6 @@ server:
 
 # Relay configuration
 relay:
-  upstream_url: "https://upstream.example.com:4433"  # Upstream server
   group_cache_size: 150  # Cache size
   frame_capacity: 2000   # Frame buffer size
 `
@@ -319,5 +311,198 @@ relay:
 	}
 	if cfg.RelayConfig.GroupCacheSize != 150 {
 		t.Errorf("Comments affected numeric parsing")
+	}
+}
+
+func TestHealthHandler_ProbeLive_GETAndHEAD(t *testing.T) {
+	h := &healthHandler{
+		statusFunc: func() relay.Status {
+			return relay.Status{Status: "healthy", ActiveConnections: 1, Timestamp: time.Now(), Uptime: "1s"}
+		},
+	}
+
+	// GET
+	req := httptest.NewRequest(http.MethodGet, "/health?probe=live", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]string
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Equal(t, "alive", resp["status"])
+
+	// HEAD should return no body
+	req = httptest.NewRequest(http.MethodHead, "/health?probe=live", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, 0, rec.Body.Len())
+}
+
+func TestHealthHandler_ProbeReady_Cases(t *testing.T) {
+	tests := map[string]struct {
+		status     relay.Status
+		wantCode   int
+		wantReady  bool
+		wantReason string
+	}{
+		"ready with healthy status": {
+			status:    relay.Status{ActiveConnections: 0, Status: "healthy"},
+			wantCode:  http.StatusOK,
+			wantReady: true,
+		},
+		"invalid connection state": {
+			status:     relay.Status{ActiveConnections: -1, Status: "healthy"},
+			wantCode:   http.StatusServiceUnavailable,
+			wantReady:  false,
+			wantReason: "invalid_connection_state",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			h := &healthHandler{statusFunc: func() relay.Status { return tt.status }}
+			req := httptest.NewRequest(http.MethodGet, "/health?probe=ready", nil)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			assert.Equal(t, tt.wantCode, rec.Code)
+
+			var resp map[string]any
+			err := json.NewDecoder(rec.Body).Decode(&resp)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantReady, resp["ready"])
+			if !tt.wantReady && tt.wantReason != "" {
+				assert.Equal(t, tt.wantReason, resp["reason"])
+			}
+		})
+	}
+}
+
+func TestHealthHandler_DefaultStatusResponses(t *testing.T) {
+	tests := map[string]struct {
+		status   relay.Status
+		wantCode int
+	}{
+		"unhealthy status code": {status: relay.Status{Status: "unhealthy", ActiveConnections: 0}, wantCode: http.StatusServiceUnavailable},
+		"healthy status code":   {status: relay.Status{Status: "healthy", ActiveConnections: 0}, wantCode: http.StatusOK},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			h := &healthHandler{statusFunc: func() relay.Status { return tt.status }}
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			assert.Equal(t, tt.wantCode, rec.Code)
+
+			var resp map[string]any
+			err := json.NewDecoder(rec.Body).Decode(&resp)
+			require.NoError(t, err)
+			assert.Equal(t, tt.status.Status, resp["status"])
+			assert.Contains(t, resp, "live")
+			assert.Contains(t, resp, "ready")
+		})
+	}
+}
+
+func TestHealthHandler_InvalidMethod(t *testing.T) {
+	h := &healthHandler{statusFunc: func() relay.Status {
+		return relay.Status{Status: "healthy", ActiveConnections: 0}
+	}}
+	req := httptest.NewRequest(http.MethodPost, "/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+// --- serveComponents tests ---
+
+type mockServer struct {
+	listenCalled   chan struct{}
+	shutdownCalled chan struct{}
+	listenErr      error
+}
+
+func newMockServer(listenErr error) *mockServer {
+	return &mockServer{listenCalled: make(chan struct{}), shutdownCalled: make(chan struct{}), listenErr: listenErr}
+}
+
+func (m *mockServer) ListenAndServe() error {
+	close(m.listenCalled)
+	if m.listenErr != nil {
+		return m.listenErr
+	}
+	// Block until Shutdown signals us to exit
+	<-m.shutdownCalled
+	return nil
+}
+
+func (m *mockServer) Shutdown(_ context.Context) error {
+	// signal the listen goroutine to exit
+	select {
+	case <-m.shutdownCalled:
+		// already closed
+	default:
+		close(m.shutdownCalled)
+	}
+	return nil
+}
+
+func TestServeComponents_ShutdownOnContextCancel(t *testing.T) {
+	relayMock := newMockServer(nil)
+	httpMock := newMockServer(nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Run serveComponents in background
+	go serveComponents(ctx, relayMock, httpMock, 1*time.Second)
+
+	// wait for both ListenAndServe to have been invoked
+	<-relayMock.listenCalled
+	<-httpMock.listenCalled
+
+	// cancel context to trigger shutdown
+	cancel()
+
+	// verify Shutdown was called on both mocks
+	select {
+	case <-relayMock.shutdownCalled:
+		// ok
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("relay shutdown was not called")
+	}
+
+	select {
+	case <-httpMock.shutdownCalled:
+		// ok
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("http shutdown was not called")
+	}
+}
+
+func TestServeComponents_IgnoresImmediateListenError(t *testing.T) {
+	// Relay.ListenAndServe returns an error immediately. serveComponents should
+	// still wait for ctx cancellation and call Shutdown on the other server.
+	relayMock := newMockServer(fmt.Errorf("listen failed"))
+	httpMock := newMockServer(nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go serveComponents(ctx, relayMock, httpMock, 1*time.Second)
+
+	// relayMock.listenCalled will be closed quickly even though it returned
+	<-relayMock.listenCalled
+	<-httpMock.listenCalled
+
+	cancel()
+
+	select {
+	case <-httpMock.shutdownCalled:
+		// ok
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("http shutdown was not called after context cancel")
 	}
 }

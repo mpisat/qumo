@@ -8,10 +8,6 @@ import (
 func TestConfigDefaults(t *testing.T) {
 	cfg := &Config{}
 
-	if cfg.Upstream != "" {
-		t.Error("Default Upstream should be empty")
-	}
-
 	if cfg.GroupCacheSize != 0 {
 		t.Error("Default GroupCacheSize should be 0")
 	}
@@ -20,32 +16,6 @@ func TestConfigDefaults(t *testing.T) {
 		t.Error("Default FrameCapacity should be 0")
 	}
 
-}
-
-// TestConfigWithUpstream tests config with upstream URL
-func TestConfigWithUpstream(t *testing.T) {
-	tests := []struct {
-		name     string
-		upstream string
-	}{
-		{"http URL", "http://localhost:4433"},
-		{"https URL", "https://example.com:4433"},
-		{"WebTransport URL", "https://example.com:4433/moq"},
-		{"IP address", "https://192.168.1.1:4433"},
-		{"localhost", "https://localhost:8080"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{
-				Upstream: tt.upstream,
-			}
-
-			if cfg.Upstream != tt.upstream {
-				t.Errorf("Expected Upstream=%s, got %s", tt.upstream, cfg.Upstream)
-			}
-		})
-	}
 }
 
 // TestConfigWithGroupCacheSize tests different cache sizes
@@ -102,13 +72,18 @@ func TestConfigWithFrameCapacity(t *testing.T) {
 // TestConfigFullyPopulated tests a fully configured Config
 func TestConfigFullyPopulated(t *testing.T) {
 	cfg := &Config{
-		Upstream:       "https://upstream.example.com:4433",
+		NodeID:         "node-1",
+		Region:         "us-west",
 		GroupCacheSize: 200,
 		FrameCapacity:  2048,
 	}
 
-	if cfg.Upstream != "https://upstream.example.com:4433" {
-		t.Error("Upstream not set correctly")
+	if cfg.NodeID != "node-1" {
+		t.Error("NodeID not set correctly")
+	}
+
+	if cfg.Region != "us-west" {
+		t.Error("Region not set correctly")
 	}
 
 	if cfg.GroupCacheSize != 200 {
@@ -124,21 +99,26 @@ func TestConfigFullyPopulated(t *testing.T) {
 // TestConfigCopy tests that Config can be copied correctly
 func TestConfigCopy(t *testing.T) {
 	original := &Config{
-		Upstream:       "https://example.com",
+		NodeID:         "node-1",
+		Region:         "us-west",
 		GroupCacheSize: 100,
 		FrameCapacity:  1024,
 	}
 
 	// Create a copy
 	copy := &Config{
-		Upstream:       original.Upstream,
+		NodeID:         original.NodeID,
+		Region:         original.Region,
 		GroupCacheSize: original.GroupCacheSize,
 		FrameCapacity:  original.FrameCapacity,
 	}
 
 	// Verify all fields match
-	if copy.Upstream != original.Upstream {
-		t.Error("Upstream not copied correctly")
+	if copy.NodeID != original.NodeID {
+		t.Error("NodeID not copied correctly")
+	}
+	if copy.Region != original.Region {
+		t.Error("Region not copied correctly")
 	}
 	if copy.GroupCacheSize != original.GroupCacheSize {
 		t.Error("GroupCacheSize not copied correctly")
@@ -148,8 +128,8 @@ func TestConfigCopy(t *testing.T) {
 	}
 
 	// Modify copy and ensure original is unchanged
-	copy.Upstream = "https://different.com"
-	if original.Upstream == copy.Upstream {
+	copy.NodeID = "node-2"
+	if original.NodeID == copy.NodeID {
 		t.Error("Modifying copy should not affect original")
 	}
 }
@@ -171,17 +151,6 @@ func TestConfigNegativeValues(t *testing.T) {
 	}
 }
 
-// TestConfigEmptyUpstream tests empty upstream configuration
-func TestConfigEmptyUpstream(t *testing.T) {
-	cfg := &Config{
-		Upstream: "",
-	}
-
-	if cfg.Upstream != "" {
-		t.Error("Empty Upstream should remain empty")
-	}
-}
-
 // TestConfigStructSize tests that Config doesn't grow unexpectedly
 func TestConfigStructSize(t *testing.T) {
 	cfg := &Config{}
@@ -192,7 +161,8 @@ func TestConfigStructSize(t *testing.T) {
 
 	// This is a documentation test - if this fails, update the test
 	// and verify all new fields are tested
-	_ = cfg.Upstream
+	_ = cfg.NodeID
+	_ = cfg.Region
 	_ = cfg.GroupCacheSize
 	_ = cfg.FrameCapacity
 
