@@ -77,7 +77,7 @@ func (h *RelayHandler) subscribe(name moqt.TrackName) *trackDistributor {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	d := &trackDistributor{
-		ring:        newGroupRing(h.GroupCacheSize),
+		ring:        newGroupRing(h.GroupCacheSize, h.FramePool),
 		subscribers: make(map[chan struct{}]struct{}),
 		onClose: func() {
 			// Cancel ingestion context

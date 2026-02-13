@@ -48,7 +48,7 @@ export OTEL_ENDPOINT=localhost:4317
 export OTEL_SAMPLING_RATE=1.0
 
 # 起動
-./qumo-relay -config configs/config.yaml
+./qumo-relay -config config.relay.yaml
 ```
 
 または config.yaml で設定：

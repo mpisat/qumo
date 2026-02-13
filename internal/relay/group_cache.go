@@ -55,9 +55,10 @@ func (gc *groupCache) next(index int) *moqt.Frame {
 	return gc.frames[index]
 }
 
-func newGroupRing(size int) *groupRing {
+func newGroupRing(size int, pool *FramePool) *groupRing {
 	ring := &groupRing{
 		caches: make([]atomic.Pointer[groupCache], size),
+		pool:   pool,
 		size:   size, // Is this needed?
 	}
 	return ring
@@ -65,6 +66,7 @@ func newGroupRing(size int) *groupRing {
 
 type groupRing struct {
 	caches []atomic.Pointer[groupCache]
+	pool   *FramePool
 	size   int
 	pos    atomic.Uint64
 }
@@ -78,7 +80,7 @@ func (ring *groupRing) add(group *moqt.GroupReader, onFrame func()) {
 	idx := int(ring.pos.Add(1) % uint64(ring.size))
 	ring.caches[idx].Store(cache)
 
-	frame := DefaultFramePool.Get()
+	frame := ring.pool.Get()
 
 	frameCount := 0
 	for frame := range group.Frames(frame) {
