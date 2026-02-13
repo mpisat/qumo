@@ -119,4 +119,3 @@ func TestShortestPath_Complex(t *testing.T) {
 		t.Errorf("unexpected path: %v", path)
 	}
 }
-

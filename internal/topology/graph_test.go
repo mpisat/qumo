@@ -275,4 +275,3 @@ func TestMatrixResponse_JSON(t *testing.T) {
 		t.Errorf("expected matrix[0][1] = 42.5 after round-trip, got %v", decoded.Matrix[0][1])
 	}
 }
-

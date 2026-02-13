@@ -713,4 +713,3 @@ func BenchmarkGroupRingOperations(b *testing.B) {
 		})
 	})
 }
-

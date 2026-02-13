@@ -52,7 +52,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  relay    Start the MoQ relay server")
-	fmt.Fprintln(os.Stderr, "  graph    Start the topology graph gateway")
+	fmt.Fprintln(os.Stderr, "  sdn      Start the SDN controller")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Flags:")
 	fmt.Fprintln(os.Stderr, "  -config string   path to config file")
