@@ -4,198 +4,260 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/okdaichi/qumo)](https://goreportcard.com/report/github.com/okdaichi/qumo)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-**qumo** is a Media over QUIC (MoQ) relay server and CDN implementation, providing high-performance media streaming over the QUIC transport protocol.
+**qumo** is a high-performance Media over QUIC (MoQ) relay server with intelligent topology management, enabling distributed media streaming over the QUIC transport protocol.
 
 ## Features
 
-- 🚀 High-performance media relay using QUIC
-- 📡 Support for Media over QUIC protocol
-- 🔒 Built-in TLS/security support
-- 📊 Prometheus metrics for monitoring
-- ⚙️ Flexible YAML-based configuration
-- 🐳 Docker support (coming soon)
-
-## Port Configuration
-
-**Standard Ports:**
-- `6670/udp` - QUIC/MoQT relay server
-- `8080/tcp` - Health check & metrics HTTP endpoint
-- `5173/tcp` - Web demo frontend (development only)
-
-**URLs:**
-- Relay: `https://localhost:6670`
-- Health: `http://localhost:8080/health`
-- Web Demo: `http://localhost:5173`
+- 🚀 **High-Performance Relay**: Built on QUIC for low-latency media streaming
+- 📡 **MoQT Protocol**: Full Media over QUIC Transport support
+- 🧭 **SDN Controller**: Centralized topology and routing management
+-  **Observability**: Prometheus metrics, health probes, and status APIs
+- 🔒 **TLS Security**: Built-in TLS 1.3 support for encrypted connections
+- 💾 **Persistent Topology**: Optional disk-based topology storage
+- 🌐 **HA Support**: Peer synchronization for high-availability deployments
 
 ## Quick Start
 
-### Prerequisites
-
-- Go 1.21 or higher
-- Basic understanding of QUIC protocol
-
 ### Installation
 
+Install the latest release:
+
 ```bash
-go install github.com/okdaichi/qumo/cmd/qumo-relay@latest
+go install github.com/okdaichi/qumo@latest
 ```
 
-### Building from Source
+### Build from Source
 
 ```bash
 git clone https://github.com/okdaichi/qumo.git
 cd qumo
-go build -o bin/qumo-relay ./cmd/qumo-relay
+go build -o qumo
 ```
 
-### Running the Relay
+### Generate TLS Certificates (Development)
+
+For local testing, generate self-signed certificates:
 
 ```bash
-# Copy the example configuration
-cp configs/config.example.yaml config.yaml
-
-# Edit the configuration as needed
-# vim config.yaml
-
-# Run the relay server
-./bin/qumo-relay --config config.yaml
+openssl req -x509 -newkey rsa:4096 -keyout certs/server.key \
+  -out certs/server.crt -days 365 -nodes \
+  -subj "/CN=localhost" \
+  -config certs/dev.cnf
 ```
 
-## Configuration
+### Run Relay Server
 
-See [`configs/config.example.yaml`](configs/config.example.yaml) for a complete configuration example with detailed comments.
+```bash
+# Copy example configuration
+cp config.relay.example.yaml config.relay.yaml
 
-Basic configuration structure:
+# Start relay server
+./qumo relay -config config.relay.yaml
+```
+
+The relay server will start on:
+- **QUIC/MoQT**: `0.0.0.0:4433` (UDP)
+- **Health/Metrics**: `localhost:8080` (HTTP)
+
+Verify it's running:
+
+```bash
+curl http://localhost:8080/health
+```
+
+## Usage
+
+qumo provides two subcommands for different deployment scenarios.
+
+### relay
+
+Start a media relay server that forwards MoQT streams between publishers and subscribers.
+
+**Start Server:**
+```bash
+qumo relay -config config.relay.yaml
+```
+
+**Configuration:**
+Copy and edit [config.relay.example.yaml](config.relay.example.yaml) with your settings.
+
+**Default Ports:**
+- `0.0.0.0:4433` - QUIC/MoQT (UDP)
+- `:8080` - Health/Metrics (HTTP)
+
+**Key Features:**
+- Media track distribution
+- Group caching for performance
+- Prometheus metrics export
+- Auto-announce to SDN controller (opt-in)
+
+**API Endpoints:**
+- `GET /health?probe={live|ready}` - Health probes
+- `GET /metrics` - Prometheus metrics
+
+**Examples:**
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# Readiness probe
+curl http://localhost:8080/health?probe=ready
+
+# Metrics
+curl http://localhost:8080/metrics
+```
+
+**Web Demo:**
+Test with browser-based webcam/audio streaming client:
+```bash
+cd solid-deno
+npm install && npm run dev
+# Open http://localhost:5173
+```
+See [solid-deno/README.md](solid-deno/README.md) for details.
+
+**Auto-Announce (optional):**
+
+When `sdn.url` is set in `config.relay.yaml`, the relay automatically registers received announcements with the SDN controller's announce table. Other relays (or clients) can then query the SDN to discover which relay holds which track.
 
 ```yaml
-server:
-  address: "0.0.0.0:6670"
-  cert_file: "certs/server.crt"
-  key_file: "certs/server.key"
-  health_check_addr: ":8080"
+sdn:
+  url: "https://sdn.example.com:8090"
+  relay_name: "relay-tokyo-1"
+  heartbeat_interval_sec: 30
+  # tls:
+  #   cert_file: "certs/relay.crt"
+  #   key_file: "certs/relay.key"
+  #   ca_file: "certs/ca.crt"
+```
 
-relay:
-  upstream_url: ""           # Optional upstream server
-  group_cache_size: 8        # Number of groups to cache
-  frame_capacity: 1500       # Frame buffer size in bytes
+Entries expire after 90 seconds on the SDN side; the relay heartbeat (default 30s) keeps them alive.
+
+### sdn
+
+Start an SDN controller that manages topology and routing across multiple relay nodes.
+
+**Start Controller:**
+```bash
+qumo sdn -config config.sdn.yaml
+```
+
+**Configuration:**
+Copy and edit [config.sdn.example.yaml](config.sdn.example.yaml) with your settings.
+
+**Default Port:**
+- `:8090` - HTTP API
+
+**Key Features:**
+- Dynamic relay registration
+- Dijkstra-based routing
+- Track announcement directory
+- Optional persistent storage
+- HA peer synchronization
+
+**API Endpoints:**
+- `PUT /node/<name>` - Register relay
+- `DELETE /node/<name>` - Deregister relay
+- `GET /route?from=X&to=Y` - Compute optimal route
+- `GET /graph` - Get topology
+- `GET /graph/matrix` - Get adjacency matrix
+- `PUT /announce/<track>` - Announce track
+- `GET /announce/lookup?track=X` - Find relays for track
+- `GET /sync` / `PUT /sync` - HA synchronization
+
+**Examples:**
+```bash
+# Get topology
+curl http://localhost:8090/graph
+
+# Compute route
+curl http://localhost:8090/route?from=relay-a&to=relay-b
+
+# Find tracks
+curl http://localhost:8090/announce/lookup?track=camera/video
 ```
 
 ## Architecture
 
-qumo implements a high-performance MOQT relay using:
+### System Overview
 
-- **Frame Pool**: Zero-allocation frame reuse for optimal memory efficiency
-- **Group Cache**: Ring buffer-based caching with configurable size
-- **Broadcast Pattern**: Efficient subscriber notification with buffered channels
-- **Concurrent Safety**: Comprehensive mutex protection and atomic operations
-
-### Performance Optimizations
-
-- Frame pooling reduces GC pressure
-- Optimized 1ms notification timeout (based on benchmarks)
-- Lock-free operations where possible
-- Efficient ring buffer for group caching
-
-## Project Structure
-
+```mermaid
+graph LR
+    Publisher["Publisher<br/>(Browser)"]
+    Relay["Relay Node<br/>(qumo)"]
+    Subscriber["Subscriber<br/>(Browser)"]
+    SDN["SDN Controller<br/>(qumo)"]
+    Routing["Dijkstra<br/>Routing"]
+    
+    Publisher -->|QUIC/MoQ| Relay
+    Relay -->|QUIC/MoQ| Subscriber
+    Relay -->|register/heartbeat| SDN
+    SDN -->|route query| Routing
 ```
-qumo/
-├── cmd/
-│   └── qumo-relay/        # Main relay server application
-├── relay/                 # Core relay implementation
-│   ├── server.go          # MOQT server wrapper
-│   ├── handler.go         # Track relay handler
-│   ├── frame_pool.go      # Memory-efficient frame pooling
-│   ├── group_cache.go     # Ring buffer group cache
-│   ├── config.go          # Configuration structures
-│   └── health/            # Health check endpoints
-├── solid-deno/            # SolidJS web demo application
-├── configs/               # Configuration examples
-├── certs/                 # TLS certificates
-├── docs/                  # Documentation
-└── README.md
-```
-
-## Testing
-
-qumo has comprehensive test coverage:
-
-```bash
-# Run all tests
-go test ./...
-
-# Run tests with coverage
-go test -cover ./...
-
-# Run with race detector
-go test -race ./...
-```
-
-## Documentation
-
-- [Contributing Guidelines](CONTRIBUTING.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Configuration Guide](configs/config.example.yaml)
-
-## Performance
-
-Key performance characteristics:
-
-- **Low Latency**: 1ms notification timeout for optimal balance
-- **Memory Efficient**: Frame pooling prevents allocation overhead
-- **Scalable**: Tested with 1000+ concurrent subscribers
-- **Concurrent**: Thread-safe operations with minimal lock contention
-
-Benchmarks (see `relay/*_test.go`):
-- Frame pool operations: ~0 allocations per Get/Put cycle
-- Broadcast to 1000 subscribers: <1ms
-- Group cache operations: Constant-time access
 
 ## Development
 
-### Running Tests
+**Requirements:** Go 1.21+, Node.js 18+ (for web demo)
 
 ```bash
-# Run all tests
+# Run tests
 go test ./...
 
-# Run tests with coverage
+# Coverage
 go test -coverprofile=coverage.out ./...
-
-# Run tests with race detector
-go test -race ./...
+go tool cover -html=coverage.out
 ```
 
-### Linting
+## Deployment
+
+### Docker (Coming Soon)
 
 ```bash
-golangci-lint run
+# Build image
+docker build -t qumo .
+
+# Run relay
+docker run -p 4433:4433/udp -p 8080:8080 \
+  -v $(pwd)/config.relay.yaml:/config.yaml \
+  -v $(pwd)/certs:/certs \
+  qumo relay -config /config.yaml
 ```
 
-### Contributing
+### Systemd Service
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+Create `/etc/systemd/system/qumo-relay.service`:
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```ini
+[Unit]
+Description=qumo Media Relay Server
+After=network.target
 
-## Community
+[Service]
+Type=simple
+User=qumo
+ExecStart=/usr/local/bin/qumo relay -config /etc/qumo/config.relay.yaml
+Restart=on-failure
+RestartSec=5
 
-- [Discussions](https://github.com/okdaichi/qumo/discussions) - Ask questions and discuss ideas
-- [Issues](https://github.com/okdaichi/qumo/issues) - Report bugs and request features
+[Install]
+WantedBy=multi-user.target
+```
 
-## License
+Enable and start:
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable qumo-relay
+sudo systemctl start qumo-relay
+```
 
-## Acknowledgments
+### Kubernetes
 
-- Media over QUIC (MoQ) Working Group
-- IETF QUIC Working Group
+See [deploy/README.md](deploy/README.md) for Kubernetes deployment manifests.
 
-## Status
+## Troubleshooting
 
-⚠️ **This project is under active development.** APIs and features may change.
+- **TLS errors**: Regenerate certificates (see Quick Start)
+- **Port in use**: Check with `lsof -i :4433` or `netstat -ano`
+
+```
