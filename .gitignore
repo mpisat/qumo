@@ -37,6 +37,10 @@ go.work.sum
 # Certificates
 certs/
 
+# Configuration files (keep only examples)
+config.*.yaml
+!config.*.example.yaml
+
 # Logs
 *.log
 
