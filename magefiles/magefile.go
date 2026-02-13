@@ -235,14 +235,14 @@ func Dev() error {
 	//   Terminal 1: mage sdn
 	//   Terminal 2: mage relay
 	//   Terminal 3: mage web
-	
+
 	fmt.Println("💡 For better development experience, run in separate terminals:")
 	fmt.Println("   Terminal 1: mage sdn")
 	fmt.Println("   Terminal 2: mage relay")
 	fmt.Println("   Terminal 3: mage web")
 	fmt.Println()
 	fmt.Println("Starting SDN controller...")
-	
+
 	return SDN()
 }
 
@@ -437,13 +437,13 @@ func Hash() error {
 // Clean removes build artifacts
 func Clean() error {
 	fmt.Println("🧹 Cleaning build artifacts...")
-	
+
 	if err := sh.Rm("../bin"); err != nil {
 		fmt.Println("⚠️  No bin directory to clean")
 	} else {
 		fmt.Println("   Removed: bin/")
 	}
-	
+
 	fmt.Println("✅ Cleanup complete!")
 	return nil
 }
