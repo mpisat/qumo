@@ -48,9 +48,6 @@ openssl req -x509 -newkey rsa:4096 -keyout certs/server.key \
 ### Run Relay Server
 
 ```bash
-# Copy example configuration
-cp config.relay.example.yaml config.relay.yaml
-
 # Start relay server
 ./qumo relay -config config.relay.yaml
 ```
@@ -64,6 +61,109 @@ Verify it's running:
 ```bash
 curl http://localhost:8080/health
 ```
+
+## Docker Deployment
+
+Run qumo in isolated containers for development and testing.
+
+### Prerequisites
+
+- Docker Engine 20.10+
+- Docker Compose v2.0+
+
+### Quick Start with Docker Compose
+
+1. **Generate TLS certificates** (required for MoQT):
+   ```bash
+   # Install mkcert (first time only)
+   # Windows: winget install FiloSottile.mkcert
+   # macOS: brew install mkcert
+   # Linux: See https://github.com/FiloSottile/mkcert#installation
+   
+   # Generate certificates
+   mkdir -p certs
+   mkcert -install
+   mkcert -cert-file certs/server.crt -key-file certs/server.key \
+     localhost 127.0.0.1 ::1
+   ```
+
+2. **Start all services**:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Verify services**:
+   ```bash
+   # SDN Controller
+   curl http://localhost:8090/graph
+   
+   # Relay Health Check
+   curl http://localhost:8080/health
+   ```
+
+4. **View logs**:
+   ```bash
+   # All services
+   docker-compose logs -f
+   
+   # Specific service
+   docker-compose logs -f relay
+   docker-compose logs -f sdn
+   ```
+
+5. **Stop services**:
+   ```bash
+   docker-compose down
+   ```
+
+### Build and Run Manually
+
+**Build image**:
+```bash
+docker build -t qumo:latest .
+```
+
+**Run relay server**:
+```bash
+docker run -d \
+  --name qumo-relay \
+  -p 4433:4433/udp \
+  -p 8080:8080 \
+  -v $(pwd)/certs:/app/certs:ro \
+  qumo:latest relay -config config.relay.yaml
+```
+
+**Run SDN controller**:
+```bash
+docker run -d \
+  --name qumo-sdn \
+  -p 8090:8090 \
+  -v $(pwd)/data:/app/data \
+  qumo:latest sdn -config config.sdn.yaml
+```
+
+### Port Mapping
+
+| Service | Port | Protocol | Description |
+|---------|------|----------|-------------|
+| Relay   | 4433 | UDP      | MoQT (QUIC) |
+| Relay   | 8080 | TCP      | Health/Metrics |
+| SDN     | 8090 | TCP      | HTTP API |
+
+### Volume Mounts
+
+- `./certs:/app/certs:ro` - TLS certificates (relay)
+- `./data:/app/data` - Persistent topology data (SDN)
+
+### Environment Customization
+
+Override configuration via environment variables:
+
+```bash
+docker run -e RELAY_ADDRESS=":5000" qumo:latest relay -config config.relay.yaml
+```
+
+See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml) for available options.
 
 ## Usage
 
@@ -79,7 +179,7 @@ qumo relay -config config.relay.yaml
 ```
 
 **Configuration:**
-Copy and edit [config.relay.example.yaml](config.relay.example.yaml) with your settings.
+Edit [config.relay.yaml](config.relay.yaml) with your settings.
 
 **Default Ports:**
 - `0.0.0.0:4433` - QUIC/MoQT (UDP)
@@ -143,7 +243,7 @@ qumo sdn -config config.sdn.yaml
 ```
 
 **Configuration:**
-Copy and edit [config.sdn.example.yaml](config.sdn.example.yaml) with your settings.
+Edit [config.sdn.yaml](config.sdn.yaml) with your settings.
 
 **Default Port:**
 - `:8090` - HTTP API

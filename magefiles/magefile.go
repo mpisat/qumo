@@ -60,7 +60,14 @@ func Help() error {
 	fmt.Println("    mage nomad:logs   - Show job logs")
 	fmt.Println("    mage nomad:clean  - Clean Nomad artifacts")
 	fmt.Println()
-	fmt.Println("  🔧 Utilities:")
+	fmt.Println("  � Docker:")
+	fmt.Println("    mage docker:build - Build Docker image")
+	fmt.Println("    mage docker:up    - Start services with docker-compose")
+	fmt.Println("    mage docker:down  - Stop services")
+	fmt.Println("    mage docker:logs  - View service logs")
+	fmt.Println("    mage docker:ps    - List running containers")
+	fmt.Println()
+	fmt.Println("  �🔧 Utilities:")
 	fmt.Println("    mage cert         - Generate TLS certificates using mkcert")
 	fmt.Println("    mage hash         - Compute/write TLS cert SHA-256")
 	fmt.Println()
@@ -524,4 +531,82 @@ func (Nomad) Clean() error {
 	_ = Nomad{}.Stop()
 	time.Sleep(1 * time.Second)
 	return sh.Rm("bin")
+}
+
+// Docker provides Docker-specific commands
+type Docker mg.Namespace
+
+// Build builds the Docker image
+func (Docker) Build() error {
+	fmt.Println("🐳 Building Docker image...")
+
+	cmd := exec.Command("docker", "build", "-t", "qumo:latest", ".")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	fmt.Println("✅ Docker image built: qumo:latest")
+	return nil
+}
+
+// Up starts all services with docker-compose
+func (Docker) Up() error {
+	fmt.Println("🚀 Starting services with docker-compose...")
+
+	cmd := exec.Command("docker-compose", "up", "-d")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("✅ Services started!")
+	fmt.Println("   SDN Controller: http://localhost:8090")
+	fmt.Println("   Relay Health:   http://localhost:8080/health")
+	fmt.Println()
+	fmt.Println("💡 View logs: mage docker:logs")
+	return nil
+}
+
+// Down stops all services
+func (Docker) Down() error {
+	fmt.Println("🛑 Stopping services...")
+
+	cmd := exec.Command("docker-compose", "down")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// Logs shows service logs
+func (Docker) Logs() error {
+	fmt.Println("📋 Service Logs:")
+
+	cmd := exec.Command("docker-compose", "logs", "-f")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// Ps lists running containers
+func (Docker) Ps() error {
+	fmt.Println("📦 Running Containers:")
+
+	cmd := exec.Command("docker-compose", "ps")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// Restart restarts all services
+func (Docker) Restart() error {
+	fmt.Println("🔄 Restarting services...")
+
+	cmd := exec.Command("docker-compose", "restart")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

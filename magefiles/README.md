@@ -49,7 +49,15 @@ Run `mage help` or `mage -l` to see all available targets.
 - `mage webBuild` - Build for production
 - `mage webClean` - Clean build artifacts
 
-### 🔧 Utilities
+### � Docker
+- `mage docker:build` - Build Docker image
+- `mage docker:up` - Start services with docker-compose
+- `mage docker:down` - Stop services
+- `mage docker:logs` - View service logs
+- `mage docker:ps` - List running containers
+- `mage docker:restart` - Restart services
+
+### �🔧 Utilities
 - `mage cert` - Generate TLS certificates
 - `mage hash` - Compute cert hash
 
