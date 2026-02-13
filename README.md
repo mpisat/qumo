@@ -18,15 +18,75 @@
 
 ## Quick Start
 
-### Installation
+### For External Users (Easiest)
 
-Install the latest release:
+Get started in 3 steps without cloning the repository:
+
+```bash
+# 1. Download config files
+mkdir qumo && cd qumo
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.relay.yaml
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.sdn.yaml
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker-compose.external.yml
+
+# 2. Generate TLS certificates
+mkdir -p certs
+mkcert -install
+mkcert -cert-file certs/server.crt -key-file certs/server.key localhost 127.0.0.1 ::1
+
+# 3. Start services
+docker-compose -f docker-compose.external.yml up -d
+
+# Verify
+curl http://localhost:8090/graph  # SDN Controller
+curl http://localhost:8080/health # Relay Server
+```
+
+### For Developers
+
+See [Installation](#installation) and [Development](#development) sections below.
+
+## Installation
+
+#### Option 1: Install via Go
 
 ```bash
 go install github.com/okdaichi/qumo@latest
 ```
 
-### Build from Source
+#### Option 2: Download Binary (Recommended)
+
+Download the latest binary from [GitHub Releases](https://github.com/okdaichi/qumo/releases):
+
+```bash
+# Linux/macOS
+curl -L https://github.com/okdaichi/qumo/releases/latest/download/qumo-linux-amd64 -o qumo
+chmod +x qumo
+./qumo relay -config config.relay.yaml
+
+# Windows
+# Download qumo-windows-amd64.exe from releases page
+```
+
+#### Option 3: Docker (No Build Required)
+
+```bash
+# Pull pre-built image from GitHub Container Registry
+docker pull ghcr.io/okdaichi/qumo:latest
+
+# Or use Docker Hub
+docker pull okdaichi/qumo:latest
+
+# Run relay
+docker run -d \
+  --name qumo-relay \
+  -p 4433:4433/udp \
+  -p 8080:8080 \
+  -v $(pwd)/certs:/app/certs:ro \
+  ghcr.io/okdaichi/qumo:latest relay -config config.relay.yaml
+```
+
+#### Option 4: Build from Source
 
 ```bash
 git clone https://github.com/okdaichi/qumo.git
@@ -69,11 +129,74 @@ Run qumo in isolated containers for development and testing.
 ### Prerequisites
 
 - Docker Engine 20.10+
-- Docker Compose v2.0+
+- Docker Compose v2.0+ (optional, for multi-service setup)
 
-### Quick Start with Docker Compose
+### Using Pre-built Images (Recommended)
 
-1. **Generate TLS certificates** (required for MoQT):
+Pull and run the latest release without building:
+
+```bash
+# Option 1: Download external compose file
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker-compose.external.yml
+
+# Generate certificates (if not already done)
+mkdir -p certs
+mkcert -install
+mkcert -cert-file certs/server.crt -key-file certs/server.key localhost 127.0.0.1 ::1
+
+# Download default config files
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.relay.yaml
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.sdn.yaml
+
+# Start services
+docker-compose -f docker-compose.external.yml up -d
+
+# Option 2: Create docker-compose.yml inline
+cat > docker-compose.yml <<EOF
+version: '3.8'
+
+services:
+  sdn:
+    image: ghcr.io/okdaichi/qumo:latest
+    container_name: qumo-sdn
+    command: ["sdn", "-config", "config.sdn.yaml"]
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./config.sdn.yaml:/app/config.sdn.yaml:ro
+      - ./data:/app/data
+    restart: unless-stopped
+
+  relay:
+    image: ghcr.io/okdaichi/qumo:latest
+    container_name: qumo-relay
+    command: ["relay", "-config", "config.relay.yaml"]
+    ports:
+      - "4433:4433/udp"
+      - "8080:8080"
+    volumes:
+      - ./config.relay.yaml:/app/config.relay.yaml:ro
+      - ./certs:/app/certs:ro
+    depends_on:
+      - sdn
+    restart: unless-stopped
+EOF
+
+# Start services
+docker-compose up -d
+```
+
+### Development Setup (Build from Source)
+
+For contributors or when modifying the code:
+
+1. **Clone repository**:
+   ```bash
+   git clone https://github.com/okdaichi/qumo.git
+   cd qumo
+   ```
+
+2. **Generate TLS certificates** (required for MoQT):
    ```bash
    # Install mkcert (first time only)
    # Windows: winget install FiloSottile.mkcert
@@ -116,7 +239,32 @@ Run qumo in isolated containers for development and testing.
    docker-compose down
    ```
 
-### Build and Run Manually
+### Run Containers Manually
+
+#### Using Pre-built Images
+
+**Run relay server**:
+```bash
+docker run -d \
+  --name qumo-relay \
+  -p 4433:4433/udp \
+  -p 8080:8080 \
+  -v $(pwd)/config.relay.yaml:/app/config.relay.yaml:ro \
+  -v $(pwd)/certs:/app/certs:ro \
+  ghcr.io/okdaichi/qumo:latest relay -config config.relay.yaml
+```
+
+**Run SDN controller**:
+```bash
+docker run -d \
+  --name qumo-sdn \
+  -p 8090:8090 \
+  -v $(pwd)/config.sdn.yaml:/app/config.sdn.yaml:ro \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/okdaichi/qumo:latest sdn -config config.sdn.yaml
+```
+
+#### Build and Run from Source
 
 **Build image**:
 ```bash
@@ -129,6 +277,7 @@ docker run -d \
   --name qumo-relay \
   -p 4433:4433/udp \
   -p 8080:8080 \
+  -v $(pwd)/config.relay.yaml:/app/config.relay.yaml:ro \
   -v $(pwd)/certs:/app/certs:ro \
   qumo:latest relay -config config.relay.yaml
 ```
@@ -138,6 +287,7 @@ docker run -d \
 docker run -d \
   --name qumo-sdn \
   -p 8090:8090 \
+  -v $(pwd)/config.sdn.yaml:/app/config.sdn.yaml:ro \
   -v $(pwd)/data:/app/data \
   qumo:latest sdn -config config.sdn.yaml
 ```
@@ -164,6 +314,74 @@ docker run -e RELAY_ADDRESS=":5000" qumo:latest relay -config config.relay.yaml
 ```
 
 See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml) for available options.
+
+## Integration with Your Project
+
+### As a Microservice
+
+Add qumo to your existing docker-compose.yml:
+
+```yaml
+services:
+  # Your existing services...
+  
+  qumo-relay:
+    image: ghcr.io/okdaichi/qumo:latest
+    command: ["relay", "-config", "config.relay.yaml"]
+    ports:
+      - "4433:4433/udp"
+      - "8080:8080"
+    volumes:
+      - ./qumo/config.relay.yaml:/app/config.relay.yaml:ro
+      - ./qumo/certs:/app/certs:ro
+    restart: unless-stopped
+```
+
+### As a Go Dependency
+
+Use qumo packages in your Go application:
+
+```go
+import (
+    "github.com/okdaichi/qumo/internal/relay"
+    "github.com/okdaichi/qumo/internal/sdn"
+)
+
+// Use relay or SDN components directly
+```
+
+### As a Sidecar (Kubernetes)
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-app
+spec:
+  containers:
+  - name: app
+    image: my-app:latest
+  - name: qumo-relay
+    image: ghcr.io/okdaichi/qumo:latest
+    args: ["relay", "-config", "/config/config.relay.yaml"]
+    ports:
+    - containerPort: 4433
+      protocol: UDP
+    - containerPort: 8080
+      protocol: TCP
+    volumeMounts:
+    - name: config
+      mountPath: /config
+    - name: certs
+      mountPath: /app/certs
+  volumes:
+  - name: config
+    configMap:
+      name: qumo-config
+  - name: certs
+    secret:
+      secretName: qumo-certs
+```
 
 ## Usage
 

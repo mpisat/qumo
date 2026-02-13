@@ -61,8 +61,9 @@ func Help() error {
 	fmt.Println("    mage nomad:clean  - Clean Nomad artifacts")
 	fmt.Println()
 	fmt.Println("  � Docker:")
-	fmt.Println("    mage docker:build - Build Docker image")
-	fmt.Println("    mage docker:up    - Start services with docker-compose")
+	fmt.Println("    mage docker:pull    - Pull pre-built image from GHCR")
+	fmt.Println("    mage docker:build   - Build Docker image")
+	fmt.Println("    mage docker:up      - Start services with docker-compose")
 	fmt.Println("    mage docker:down  - Stop services")
 	fmt.Println("    mage docker:logs  - View service logs")
 	fmt.Println("    mage docker:ps    - List running containers")
@@ -535,6 +536,22 @@ func (Nomad) Clean() error {
 
 // Docker provides Docker-specific commands
 type Docker mg.Namespace
+
+// Pull pulls the latest image from GitHub Container Registry
+func (Docker) Pull() error {
+	fmt.Println("🐳 Pulling latest qumo image from GitHub Container Registry...")
+
+	cmd := exec.Command("docker", "pull", "ghcr.io/okdaichi/qumo:latest")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	fmt.Println("✅ Image pulled successfully!")
+	fmt.Println("   Tag: ghcr.io/okdaichi/qumo:latest")
+	return nil
+}
 
 // Build builds the Docker image
 func (Docker) Build() error {
