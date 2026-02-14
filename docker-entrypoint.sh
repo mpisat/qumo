@@ -86,9 +86,12 @@ case "$COMMAND" in
         if [ "$CONFIG_FILE" = "-config" ] && [ ! -f "$3" ]; then
             echo "📝 Generating SDN config from environment variables..."
             generate_sdn_config
+            generate_insecure_certs
             mkdir -p "${DATA_DIR:-./data}"
             exec /app/qumo sdn -config /tmp/config.sdn.yaml
         else
+            generate_insecure_certs
+            mkdir -p "${DATA_DIR:-./data}"
             exec /app/qumo "$@"
         fi
         ;;
