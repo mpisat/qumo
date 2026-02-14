@@ -588,7 +588,6 @@ Edit [config.sdn.yaml](config.sdn.yaml) with your settings.
 - `DELETE /node/<name>` - Deregister relay
 - `GET /route?from=X&to=Y` - Compute optimal route
 - `GET /graph` - Get topology
-- `GET /graph/matrix` - Get adjacency matrix
 - `PUT /announce/<track>` - Announce track
 - `GET /announce/lookup?track=X` - Find relays for track
 - `GET /sync` / `PUT /sync` - HA synchronization

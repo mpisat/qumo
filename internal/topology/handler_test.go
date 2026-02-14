@@ -266,41 +266,6 @@ func TestGraphHandlerFunc_InvalidMethod(t *testing.T) {
 	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 }
 
-func TestGraphMatrixHandlerFunc(t *testing.T) {
-	topo := &Topology{}
-	topo.Register(RelayInfo{Name: "A", Neighbors: map[string]float64{"B": 2}})
-	topo.Register(RelayInfo{Name: "B", Neighbors: map[string]float64{}})
-
-	handler := GraphMatrixHandlerFunc(topo)
-
-	req := httptest.NewRequest(http.MethodGet, "/graph/matrix", nil)
-	rec := httptest.NewRecorder()
-
-	handler(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
-
-	var resp MatrixResponse
-	err := json.NewDecoder(rec.Body).Decode(&resp)
-	require.NoError(t, err)
-	assert.Len(t, resp.NodeIDs, 2)
-	assert.Len(t, resp.Matrix, 2)
-	assert.Len(t, resp.Matrix[0], 2)
-}
-
-func TestGraphMatrixHandlerFunc_InvalidMethod(t *testing.T) {
-	topo := &Topology{}
-	handler := GraphMatrixHandlerFunc(topo)
-
-	req := httptest.NewRequest(http.MethodPut, "/graph/matrix", nil)
-	rec := httptest.NewRecorder()
-
-	handler(rec, req)
-
-	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
-}
-
 func TestJsonError(t *testing.T) {
 	rec := httptest.NewRecorder()
 

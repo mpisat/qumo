@@ -1,9 +1,5 @@
 package topology
 
-import (
-	"sort"
-)
-
 // Graph represents a topology graph using adjacency lists.
 // Nodes are indexed by their ID for O(1) lookup.
 type Graph struct {
@@ -58,13 +54,6 @@ type GraphResponse struct {
 	Adjacency map[string]map[string]float64 `json:"adjacency"`
 }
 
-// MatrixResponse represents the graph as a dense adjacency matrix.
-// Optimized for linear algebra operations (PageRank, spectral analysis, etc.).
-type MatrixResponse struct {
-	NodeIDs []string    `json:"node_ids"` // Node ID to index mapping
-	Matrix  [][]float64 `json:"matrix"`   // Dense adjacency matrix (matrix[i][j] = cost from NodeIDs[i] to NodeIDs[j])
-}
-
 // NodeResponse is a node in the graph response.
 type NodeResponse struct {
 	ID      string `json:"id"`
@@ -96,48 +85,6 @@ func (g *Graph) ToResponse() GraphResponse {
 	}
 
 	return resp
-}
-
-// ToMatrix converts the graph to a dense adjacency matrix representation.
-// Returns a matrix where matrix[i][j] = cost from NodeIDs[i] to NodeIDs[j].
-// Missing edges are represented as 0 (caller can treat as infinity if needed).
-func (g *Graph) ToMatrix() MatrixResponse {
-	// Collect and sort node IDs for consistent ordering
-	nodeIDs := make([]string, 0, len(g.Nodes))
-	for id := range g.Nodes {
-		nodeIDs = append(nodeIDs, id)
-	}
-	// Sort for deterministic output
-	sort.Strings(nodeIDs)
-
-	// Build index map for O(1) lookup
-	idxMap := make(map[string]int, len(nodeIDs))
-	for i, id := range nodeIDs {
-		idxMap[id] = i
-	}
-
-	// Initialize N x N matrix with zeros
-	n := len(nodeIDs)
-	matrix := make([][]float64, n)
-	for i := range matrix {
-		matrix[i] = make([]float64, n)
-	}
-
-	// Populate matrix with edge costs
-	for srcID, node := range g.Nodes {
-		srcIdx := idxMap[srcID]
-		for _, edge := range node.Edges {
-			dstIdx, ok := idxMap[edge.To]
-			if ok {
-				matrix[srcIdx][dstIdx] = float64(edge.Cost)
-			}
-		}
-	}
-
-	return MatrixResponse{
-		NodeIDs: nodeIDs,
-		Matrix:  matrix,
-	}
 }
 
 // FromResponse reconstructs a Graph from a GraphResponse.

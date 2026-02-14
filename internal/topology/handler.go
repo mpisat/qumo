@@ -131,23 +131,6 @@ func GraphHandlerFunc(topo *Topology) http.HandlerFunc {
 	}
 }
 
-// GraphMatrixHandlerFunc returns an http.HandlerFunc that serves /graph/matrix.
-func GraphMatrixHandlerFunc(topo *Topology) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		g := topo.Snapshot()
-		resp := g.ToMatrix()
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
-	}
-}
-
 // jsonError writes a JSON error response.
 func jsonError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")

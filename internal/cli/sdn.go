@@ -61,7 +61,6 @@ func RunSDN(args []string) error {
 	mux.HandleFunc("/relay/", topology.NewNodeHandlerFunc(topo))
 	mux.HandleFunc("/route", topology.RouteHandlerFunc(topo))
 	mux.HandleFunc("/graph", topology.GraphHandlerFunc(topo))
-	mux.HandleFunc("/graph/matrix", topology.GraphMatrixHandlerFunc(topo))
 	mux.HandleFunc("/sync", topology.SyncHandlerFunc(topo))
 
 	// Announce table routes
@@ -102,7 +101,6 @@ func RunSDN(args []string) error {
 	log.Println("  /relay/<name>   - PUT: register relay (cost+load), DELETE: deregister")
 	log.Println("  /route          - GET: compute route (?from=X&to=Y)")
 	log.Println("  /graph          - GET: current topology")
-	log.Println("  /graph/matrix   - GET: dense adjacency matrix")
 	log.Println("  /announce/...   - PUT/DELETE: track announcements")
 	log.Println("  /announce/lookup - GET: find relays by track")
 	log.Println("  /announce       - GET: list all announcements")
