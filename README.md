@@ -22,6 +22,30 @@
 
 Get started in 3 steps without cloning the repository:
 
+**Option 1: Super Simple (PostgreSQL-style)**
+
+Just add to your docker-compose.yml - no config files or certificates needed:
+
+```yaml
+services:
+  qumo-relay:
+    image: ghcr.io/okdaichi/qumo:latest
+    ports:
+      - "4433:4433/udp"
+      - "8080:8080"
+    environment:
+      - INSECURE=true  # Auto-generates self-signed certs
+
+  # Or use the provided simple compose file:
+  # docker-compose -f docker-compose.simple.yml up -d
+```
+
+That's it! Visit:
+- Relay health: http://localhost:8080/health
+- Relay metrics: http://localhost:8080/metrics
+
+**Option 2: Full Setup (with real certificates)**
+
 ```bash
 # 1. Download config files
 mkdir qumo && cd qumo
@@ -309,31 +333,83 @@ docker run -d \
 
 Override configuration via environment variables:
 
+**Relay Server:**
+- `INSECURE=true` - Auto-generate self-signed certificates (development only)
+- `RELAY_ADDR` - Bind address (default: `0.0.0.0:4433`)
+- `HEALTH_ADDR` - Health check endpoint (default: `:8080`)
+- `CERT_FILE` - TLS certificate path (default: `certs/server.crt`)
+- `KEY_FILE` - TLS key path (default: `certs/server.key`)
+- `GROUP_CACHE_SIZE` - Group cache size (default: `100`)
+- `FRAME_CAPACITY` - Frame buffer size (default: `1500`)
+- `SDN_URL` - SDN controller URL (optional)
+- `RELAY_NAME` - Relay identifier (optional)
+- `HEARTBEAT_INTERVAL` - SDN heartbeat interval in seconds (default: `30`)
+
+**SDN Controller:**
+- `SDN_ADDR` - Bind address (default: `:8090`)
+- `DATA_DIR` - Data directory (default: `./data`)
+- `PEER_URL` - HA peer URL (optional)
+- `SYNC_INTERVAL` - Sync interval in seconds (default: `10`)
+
+**Example:**
 ```bash
-docker run -e RELAY_ADDRESS=":5000" qumo:latest relay -config config.relay.yaml
+docker run -e INSECURE=true -e RELAY_ADDR=:5000 qumo:latest relay -config config.relay.yaml
 ```
 
 See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml) for available options.
 
 ## Integration with Your Project
 
-### As a Microservice
+### As a Microservice (PostgreSQL-style)
 
-Add qumo to your existing docker-compose.yml:
+Add qumo to your existing docker-compose.yml - just like adding a database:
 
 ```yaml
 services:
-  # Your existing services...
+  # Your existing services
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: example
+    ports:
+      - "5432:5432"
   
+  app:
+    image: your-app:latest
+    depends_on:
+      - db
+      - qumo-relay
+  
+  # Add qumo - no config files needed!
   qumo-relay:
     image: ghcr.io/okdaichi/qumo:latest
-    command: ["relay", "-config", "config.relay.yaml"]
+    ports:
+      - "4433:4433/udp"
+      - "8080:8080"
+    environment:
+      - INSECURE=true  # Development mode with auto-generated certs
+    restart: unless-stopped
+```
+
+That's it! Your app can now use:
+- MoQT endpoint: `wss://localhost:4433` (or `qumo-relay:4433` from containers)
+- Health check: `http://qumo-relay:8080/health`
+- Metrics: `http://qumo-relay:8080/metrics`
+
+### Production Setup
+
+For production, provide real certificates:
+
+```yaml
+services:
+  qumo-relay:
+    image: ghcr.io/okdaichi/qumo:latest
     ports:
       - "4433:4433/udp"
       - "8080:8080"
     volumes:
-      - ./qumo/config.relay.yaml:/app/config.relay.yaml:ro
-      - ./qumo/certs:/app/certs:ro
+      - ./certs:/app/certs:ro  # Mount your real TLS certificates
+      - ./config.relay.yaml:/app/config.relay.yaml:ro
     restart: unless-stopped
 ```
 
