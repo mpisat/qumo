@@ -21,8 +21,7 @@ version: '3.8'
 services:
   # SDN Controller - Network Brain
   sdn:
-    build: .
-    image: qumo:latest
+    image: ghcr.io/okdaichi/qumo:latest
     container_name: qumo-sdn
     command: ["sdn", "-config", "/tmp/config.sdn.yaml"]
     ports:
@@ -45,8 +44,7 @@ services:
 
   # Relay Server - Tokyo
   relay-tokyo:
-    build: .
-    image: qumo:latest
+    image: ghcr.io/okdaichi/qumo:latest
     container_name: qumo-relay-tokyo
     command: ["relay", "-config", "/tmp/config.relay.yaml"]
     ports:
@@ -73,8 +71,7 @@ services:
 
   # Relay Server - London
   relay-london:
-    build: .
-    image: qumo:latest
+    image: ghcr.io/okdaichi/qumo:latest
     container_name: qumo-relay-london
     command: ["relay", "-config", "/tmp/config.relay.yaml"]
     ports:
@@ -101,8 +98,7 @@ services:
 
   # Relay Server - New York
   relay-newyork:
-    build: .
-    image: qumo:latest
+    image: ghcr.io/okdaichi/qumo:latest
     container_name: qumo-relay-newyork
     command: ["relay", "-config", "/tmp/config.relay.yaml"]
     ports:
