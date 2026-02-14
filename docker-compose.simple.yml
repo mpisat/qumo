@@ -16,8 +16,6 @@
 #   - Relay London:    https://localhost:4434 (Health: http://localhost:8081)
 #   - Relay New York:  https://localhost:4435 (Health: http://localhost:8082)
 
-version: '3.8'
-
 services:
   # SDN Controller - Network Brain
   sdn:
@@ -35,6 +33,7 @@ services:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8090/graph"]
       interval: 10s
       timeout: 3s
+      start_period: 15s
       retries: 3
     restart: unless-stopped
     networks:
@@ -64,6 +63,7 @@ services:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
       interval: 10s
       timeout: 3s
+      start_period: 30s
       retries: 3
     restart: unless-stopped
     networks:
@@ -91,6 +91,7 @@ services:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
       interval: 10s
       timeout: 3s
+      start_period: 30s
       retries: 3
     restart: unless-stopped
     networks:
@@ -118,6 +119,7 @@ services:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
       interval: 10s
       timeout: 3s
+      start_period: 30s
       retries: 3
     restart: unless-stopped
     networks:
