@@ -11,10 +11,12 @@
 - 🚀 **High-Performance Relay**: Built on QUIC for low-latency media streaming
 - 📡 **MoQT Protocol**: Full Media over QUIC Transport support
 - 🧭 **SDN Controller**: Centralized topology and routing management
--  **Observability**: Prometheus metrics, health probes, and status APIs
+- 🔄 **Self-Organizing Topology**: Relays self-register via heartbeat; stale nodes auto-expire (Node TTL)
+- 📊 **Observability**: Prometheus metrics, health probes, and status APIs
 - 🔒 **TLS Security**: Built-in TLS 1.3 support for encrypted connections
 - 💾 **Persistent Topology**: Optional disk-based topology storage
 - 🌐 **HA Support**: Peer synchronization for high-availability deployments
+- 🐳 **Docker-First**: PostgreSQL-style zero-config with env vars; multi-arch images
 
 ## Quick Start
 
@@ -23,11 +25,11 @@
 Experience a complete MoQT network with 1 SDN controller and 3 relay servers:
 
 ```bash
-# Start demo environment (network auto-configured)
-docker compose -f docker compose.simple.yml up
+# Start demo environment
+docker compose -f docker-compose.simple.yml up
 
-# The setup happens automatically - watch the logs!
-# Once you see "✅ Demo network configured!", try:
+# Each relay self-registers its topology via heartbeat — no setup service needed.
+# After ~30 seconds, the SDN graph builds itself:
 
 # View network topology
 curl http://localhost:8090/graph | jq
@@ -35,8 +37,11 @@ curl http://localhost:8090/graph | jq
 # Find optimal route from Tokyo to New York
 curl "http://localhost:8090/route?from=relay-tokyo&to=relay-newyork"
 
-# Stop demo (in another terminal)
-docker compose -f docker compose.simple.yml down
+# Check version
+docker exec qumo-relay-tokyo /app/qumo version
+
+# Stop demo
+docker compose -f docker-compose.simple.yml down
 ```
 
 **Network Topology (auto-configured):**
@@ -50,7 +55,7 @@ relay-tokyo (Asia) <--250ms--> relay-london (Europe) <--80ms--> relay-newyork (A
 - Relay London: https://localhost:4434 (health: http://localhost:8081)
 - Relay New York: https://localhost:4435 (health: http://localhost:8082)
 
-**No shell scripts or manual setup required!** Everything runs in Docker and works the same on Windows, macOS, and Linux.
+**No shell scripts or manual setup required!** Relays self-register their neighbors via topology heartbeat. Everything runs in Docker and works the same on Windows, macOS, and Linux.
 
 ### For External Users (Easiest)
 
@@ -58,7 +63,7 @@ Get started in 3 steps without cloning the repository:
 
 **Option 1: Super Simple (PostgreSQL-style)**
 
-Just add to your docker compose.yml - no config files or certificates needed:
+Just add to your docker-compose.yml - no config files or certificates needed:
 
 ```yaml
 services:
@@ -71,7 +76,7 @@ services:
       - INSECURE=true  # Auto-generates self-signed certs
 
   # Or use the provided simple compose file:
-  # docker compose -f docker compose.simple.yml up -d
+  # docker compose -f docker-compose.simple.yml up -d
 ```
 
 That's it! Visit:
@@ -85,7 +90,7 @@ That's it! Visit:
 mkdir qumo && cd qumo
 curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.relay.yaml
 curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.sdn.yaml
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker compose.external.yml
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker-compose.external.yml
 
 # 2. Generate TLS certificates
 mkdir -p certs
@@ -93,7 +98,7 @@ mkcert -install
 mkcert -cert-file certs/server.crt -key-file certs/server.key localhost 127.0.0.1 ::1
 
 # 3. Start services
-docker compose -f docker compose.external.yml up -d
+docker compose -f docker-compose.external.yml up -d
 
 # Verify
 curl http://localhost:8090/graph  # SDN Controller
@@ -149,353 +154,29 @@ docker run -d \
 ```bash
 git clone https://github.com/okdaichi/qumo.git
 cd qumo
-go build -o qumo
-```
-
-### Generate TLS Certificates (Development)
-
-For local testing, generate self-signed certificates:
-
-```bash
-openssl req -x509 -newkey rsa:4096 -keyout certs/server.key \
-  -out certs/server.crt -days 365 -nodes \
-  -subj "/CN=localhost" \
-  -config certs/dev.cnf
-```
-
-### Run Relay Server
-
-```bash
-# Start relay server
-./qumo relay -config config.relay.yaml
-```
-
-The relay server will start on:
-- **QUIC/MoQT**: `0.0.0.0:4433` (UDP)
-- **Health/Metrics**: `localhost:8080` (HTTP)
-
-Verify it's running:
-
-```bash
-curl http://localhost:8080/health
-```
-
-## Docker Deployment
-
-Run qumo in isolated containers for development and testing.
-
-### Prerequisites
-
-- Docker Engine 20.10+
-- Docker Compose v2.0+ (optional, for multi-service setup)
-
-### Using Pre-built Images (Recommended)
-
-Pull and run the latest release without building:
-
-```bash
-# Option 1: Download external compose file
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker compose.external.yml
-
-# Generate certificates (if not already done)
-mkdir -p certs
-mkcert -install
-mkcert -cert-file certs/server.crt -key-file certs/server.key localhost 127.0.0.1 ::1
-
-# Download default config files
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.relay.yaml
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.sdn.yaml
-
-# Start services
-docker compose -f docker compose.external.yml up -d
-
-# Option 2: Create docker compose.yml inline
-cat > docker compose.yml <<EOF
-version: '3.8'
-
-services:
-  sdn:
-    image: ghcr.io/okdaichi/qumo:latest
-    container_name: qumo-sdn
-    command: ["sdn", "-config", "config.sdn.yaml"]
-    ports:
-      - "8090:8090"
-    volumes:
-      - ./config.sdn.yaml:/app/config.sdn.yaml:ro
-      - ./data:/app/data
-    restart: unless-stopped
-
-  relay:
-    image: ghcr.io/okdaichi/qumo:latest
-    container_name: qumo-relay
-    command: ["relay", "-config", "config.relay.yaml"]
-    ports:
-      - "4433:4433/udp"
-      - "8080:8080"
-    volumes:
-      - ./config.relay.yaml:/app/config.relay.yaml:ro
-      - ./certs:/app/certs:ro
-    depends_on:
-      - sdn
-    restart: unless-stopped
-EOF
-
-# Start services
-docker compose up -d
-```
-
-### Development Setup (Build from Source)
-
-For contributors or when modifying the code:
-
-1. **Clone repository**:
-   ```bash
-   git clone https://github.com/okdaichi/qumo.git
-   cd qumo
-   ```
-
-2. **Generate TLS certificates** (required for MoQT):
-   ```bash
-   # Install mkcert (first time only)
-   # Windows: winget install FiloSottile.mkcert
-   # macOS: brew install mkcert
-   # Linux: See https://github.com/FiloSottile/mkcert#installation
-
-   # Generate certificates
-   mkdir -p certs
-   mkcert -install
-   mkcert -cert-file certs/server.crt -key-file certs/server.key \
-     localhost 127.0.0.1 ::1
-   ```
-
-2. **Start all services**:
-   ```bash
-   docker compose up -d
-   ```
-
-3. **Verify services**:
-   ```bash
-   # SDN Controller
-   curl http://localhost:8090/graph
-
-   # Relay Health Check
-   curl http://localhost:8080/health
-   ```
-
-4. **View logs**:
-   ```bash
-   # All services
-   docker compose logs -f
-
-   # Specific service
-   docker compose logs -f relay
-   docker compose logs -f sdn
-   ```
-
-5. **Stop services**:
-   ```bash
-   docker compose down
-   ```
-
-### Run Containers Manually
-
-#### Using Pre-built Images
-
-**Run relay server**:
-```bash
-docker run -d \
-  --name qumo-relay \
-  -p 4433:4433/udp \
-  -p 8080:8080 \
-  -v $(pwd)/config.relay.yaml:/app/config.relay.yaml:ro \
-  -v $(pwd)/certs:/app/certs:ro \
-  ghcr.io/okdaichi/qumo:latest relay -config config.relay.yaml
-```
-
-**Run SDN controller**:
-```bash
-docker run -d \
-  --name qumo-sdn \
-  -p 8090:8090 \
-  -v $(pwd)/config.sdn.yaml:/app/config.sdn.yaml:ro \
-  -v $(pwd)/data:/app/data \
-  ghcr.io/okdaichi/qumo:latest sdn -config config.sdn.yaml
-```
-
-#### Build and Run from Source
-
-**Build image**:
-```bash
-docker build -t qumo:latest .
-```
-
-**Run relay server**:
-```bash
-docker run -d \
-  --name qumo-relay \
-  -p 4433:4433/udp \
-  -p 8080:8080 \
-  -v $(pwd)/config.relay.yaml:/app/config.relay.yaml:ro \
-  -v $(pwd)/certs:/app/certs:ro \
-  qumo:latest relay -config config.relay.yaml
-```
-
-**Run SDN controller**:
-```bash
-docker run -d \
-  --name qumo-sdn \
-  -p 8090:8090 \
-  -v $(pwd)/config.sdn.yaml:/app/config.sdn.yaml:ro \
-  -v $(pwd)/data:/app/data \
-  qumo:latest sdn -config config.sdn.yaml
-```
-
-### Port Mapping
-
-| Service | Port | Protocol | Description |
-|---------|------|----------|-------------|
-| Relay   | 4433 | UDP      | MoQT (QUIC) |
-| Relay   | 8080 | TCP      | Health/Metrics |
-| SDN     | 8090 | TCP      | HTTP API |
-
-### Volume Mounts
-
-- `./certs:/app/certs:ro` - TLS certificates (relay)
-- `./data:/app/data` - Persistent topology data (SDN)
-
-### Environment Customization
-
-Override configuration via environment variables:
-
-**Relay Server:**
-- `INSECURE=true` - Auto-generate self-signed certificates (development only)
-- `RELAY_ADDR` - Bind address (default: `0.0.0.0:4433`)
-- `HEALTH_ADDR` - Health check endpoint (default: `:8080`)
-- `CERT_FILE` - TLS certificate path (default: `certs/server.crt`)
-- `KEY_FILE` - TLS key path (default: `certs/server.key`)
-- `GROUP_CACHE_SIZE` - Group cache size (default: `100`)
-- `FRAME_CAPACITY` - Frame buffer size (default: `1500`)
-- `SDN_URL` - SDN controller URL (optional)
-- `RELAY_NAME` - Relay identifier (optional)
-- `HEARTBEAT_INTERVAL` - SDN heartbeat interval in seconds (default: `30`)
-
-**SDN Controller:**
-- `SDN_ADDR` - Bind address (default: `:8090`)
-- `DATA_DIR` - Data directory (default: `./data`)
-- `PEER_URL` - HA peer URL (optional)
-- `SYNC_INTERVAL` - Sync interval in seconds (default: `10`)
-
-**Example:**
-```bash
-docker run -e INSECURE=true -e RELAY_ADDR=:5000 qumo:latest relay -config config.relay.yaml
-```
-
-See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml) for available options.
-
-## Integration with Your Project
-
-### As a Microservice (PostgreSQL-style)
-
-Add qumo to your existing docker compose.yml - just like adding a database:
-
-```yaml
-services:
-  # Your existing services
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_PASSWORD: example
-    ports:
-      - "5432:5432"
-
-  app:
-    image: your-app:latest
-    depends_on:
-      - db
-      - qumo-relay
-
-  # Add qumo - no config files needed!
-  qumo-relay:
-    image: ghcr.io/okdaichi/qumo:latest
-    ports:
-      - "4433:4433/udp"
-      - "8080:8080"
-    environment:
-      - INSECURE=true  # Development mode with auto-generated certs
-    restart: unless-stopped
-```
-
-That's it! Your app can now use:
-- MoQT endpoint: `wss://localhost:4433` (or `qumo-relay:4433` from containers)
-- Health check: `http://qumo-relay:8080/health`
-- Metrics: `http://qumo-relay:8080/metrics`
-
-### Production Setup
-
-For production, provide real certificates:
-
-```yaml
-services:
-  qumo-relay:
-    image: ghcr.io/okdaichi/qumo:latest
-    ports:
-      - "4433:4433/udp"
-      - "8080:8080"
-    volumes:
-      - ./certs:/app/certs:ro  # Mount your real TLS certificates
-      - ./config.relay.yaml:/app/config.relay.yaml:ro
-    restart: unless-stopped
-```
-
-### As a Go Dependency
-
-Use qumo packages in your Go application:
-
-```go
-import (
-    "github.com/okdaichi/qumo/internal/relay"
-    "github.com/okdaichi/qumo/internal/sdn"
-)
-
-// Use relay or SDN components directly
-```
-
-### As a Sidecar (Kubernetes)
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: my-app
-spec:
-  containers:
-  - name: app
-    image: my-app:latest
-  - name: qumo-relay
-    image: ghcr.io/okdaichi/qumo:latest
-    args: ["relay", "-config", "/config/config.relay.yaml"]
-    ports:
-    - containerPort: 4433
-      protocol: UDP
-    - containerPort: 8080
-      protocol: TCP
-    volumeMounts:
-    - name: config
-      mountPath: /config
-    - name: certs
-      mountPath: /app/certs
-  volumes:
-  - name: config
-    configMap:
-      name: qumo-config
-  - name: certs
-    secret:
-      secretName: qumo-certs
+mage build        # builds bin/qumo with version info
+# or: go build -o qumo .
 ```
 
 ## Usage
 
 qumo provides two subcommands for different deployment scenarios.
+
+### version
+
+Print build-time version information.
+
+```bash
+qumo version
+# qumo v0.3.0
+#   commit: f5a09bf
+#   built:  2026-02-14T02:08:26Z
+#   go:     go1.26.0
+
+# Also works with:
+qumo --version
+qumo -v
+```
 
 ### relay
 
@@ -544,22 +225,29 @@ npm install && npm run dev
 ```
 See [solid-deno/README.md](solid-deno/README.md) for details.
 
-**Auto-Announce (optional):**
+**Auto-Announce & Topology Registration (optional):**
 
 When `sdn.url` is set in `config.relay.yaml`, the relay automatically registers received announcements with the SDN controller's announce table. Other relays (or clients) can then query the SDN to discover which relay holds which track.
+
+If `neighbors` is configured, the relay also self-registers its topology via `PUT /relay/<name>` heartbeat, so the SDN builds the network graph automatically.
 
 ```yaml
 sdn:
   url: "https://sdn.example.com:8090"
   relay_name: "relay-tokyo-1"
   heartbeat_interval_sec: 30
+  address: "https://relay-tokyo-1:4433"   # MoQT endpoint for next-hop routing
+  region: "asia"                           # region tag
+  neighbors:                               # neighbor relays and edge costs
+    relay-london-1: 250
+    relay-newyork-1: 180
   # tls:
   #   cert_file: "certs/relay.crt"
   #   key_file: "certs/relay.key"
   #   ca_file: "certs/ca.crt"
 ```
 
-Entries expire after 90 seconds on the SDN side; the relay heartbeat (default 30s) keeps them alive.
+Entries expire after `node_ttl_sec` on the SDN side (default 90s); the relay heartbeat (default 30s) keeps them alive.
 
 ### sdn
 
@@ -577,15 +265,16 @@ Edit [config.sdn.yaml](config.sdn.yaml) with your settings.
 - `:8090` - HTTP API
 
 **Key Features:**
-- Dynamic relay registration
+- Dynamic relay registration with automatic topology discovery
+- Node TTL & sweeper: relays that stop heartbeating are auto-removed
 - Dijkstra-based routing
 - Track announcement directory
 - Optional persistent storage
 - HA peer synchronization
 
 **API Endpoints:**
-- `PUT /node/<name>` - Register relay
-- `DELETE /node/<name>` - Deregister relay
+- `PUT /relay/<name>` - Register/heartbeat relay (with neighbors, region, address)
+- `DELETE /relay/<name>` - Deregister relay
 - `GET /route?from=X&to=Y` - Compute optimal route
 - `GET /graph` - Get topology
 - `PUT /announce/<track>` - Announce track
@@ -604,6 +293,42 @@ curl http://localhost:8090/route?from=relay-a&to=relay-b
 curl http://localhost:8090/announce/lookup?track=camera/video
 ```
 
+## Configuration
+
+### Environment Variables
+
+Override configuration via environment variables (Docker only):
+
+**Relay Server:**
+- `INSECURE=true` - Auto-generate self-signed certificates (development only)
+- `RELAY_ADDR` - Bind address (default: `0.0.0.0:4433`)
+- `CERT_FILE` / `KEY_FILE` - TLS certificate paths
+- `GROUP_CACHE_SIZE` - Group cache size (default: `100`)
+- `FRAME_CAPACITY` - Frame buffer size (default: `1500`)
+- `SDN_URL` - SDN controller URL (optional)
+- `RELAY_NAME` - Relay identifier (optional)
+- `HEARTBEAT_INTERVAL` - Heartbeat interval in seconds (default: `30`)
+- `NEIGHBORS` - Comma-separated neighbor list, e.g. `relay-london:250,relay-newyork:80`
+- `REGION` - Region tag, e.g. `asia`
+- `RELAY_MOQT_ADDR` - MoQT endpoint for next-hop routing (default: `https://<RELAY_NAME>:4433`)
+
+**SDN Controller:**
+- `SDN_ADDR` - Bind address (default: `:8090`)
+- `DATA_DIR` - Data directory (default: `./data`)
+- `PEER_URL` - HA peer URL (optional)
+- `SYNC_INTERVAL` - Sync interval in seconds (default: `10`)
+- `NODE_TTL_SEC` - Node TTL in seconds; `0` = never expire (default: `90`)
+
+See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml) for all YAML options.
+
+### Ports
+
+| Service | Port | Protocol | Description |
+|---------|------|----------|-------------|
+| Relay   | 4433 | UDP      | MoQT (QUIC) |
+| Relay   | 8080 | TCP      | Health/Metrics |
+| SDN     | 8090 | TCP      | HTTP API |
+
 ## Architecture
 
 ### System Overview
@@ -618,13 +343,76 @@ graph LR
 
     Publisher -->|QUIC/MoQ| Relay
     Relay -->|QUIC/MoQ| Subscriber
-    Relay -->|register/heartbeat| SDN
+    Relay -->|"register neighbors<br/>heartbeat (PUT /relay)"| SDN
     SDN -->|route query| Routing
 ```
+
+### Topology Lifecycle
+
+1. **Registration** — Each relay sends `PUT /relay/<name>` with `{region, address, neighbors}` on startup
+2. **Heartbeat** — The same PUT is repeated every `heartbeat_interval_sec` (default 30s)
+3. **Routing** — SDN runs Dijkstra on the adjacency-list graph; returns full path, relay uses only next-hop (hop-by-hop forwarding)
+4. **Expiry** — If a relay stops heartbeating, the SDN sweeper removes it after `node_ttl_sec` (default 90s)
 
 ## Development
 
 **Requirements:** Go 1.26+, Node.js 18+ (for web demo)
+
+### Build System (Mage)
+
+qumo uses [Mage](https://magefile.org/) for build automation. All tasks embed version info via `-ldflags`.
+
+```bash
+# Install mage (first time)
+go install github.com/magefile/mage@latest
+
+# Show all available targets
+mage help
+
+# Build & Install
+mage build         # Build binary to bin/qumo (with version ldflags)
+mage install       # Install to $GOPATH/bin
+
+# Test & Lint
+mage test          # Run all tests
+mage testVerbose   # Run tests with verbose output
+mage check         # Run fmt + vet + test
+
+# Docker
+mage docker:build  # Build Docker image with version tags
+mage docker:up     # Start services with docker compose
+mage docker:down   # Stop services
+mage docker:logs   # View service logs
+
+# Demo (3-relay + SDN)
+mage demo:up       # Start demo environment
+mage demo:down     # Stop demo environment
+mage demo:status   # Check demo status
+
+# Runtime
+mage relay         # Start relay server
+mage sdn           # Start SDN controller
+mage dev           # Start relay + SDN in dev mode
+```
+
+### Building with Version Info
+
+Version metadata is injected at build time via `-ldflags`:
+
+```bash
+# Automatic (via Mage)
+mage build
+./bin/qumo version
+
+# Manual
+go build -ldflags "-s -w \
+  -X github.com/okdaichi/qumo/internal/version.version=$(git describe --tags --always) \
+  -X github.com/okdaichi/qumo/internal/version.commit=$(git rev-parse --short HEAD) \
+  -X github.com/okdaichi/qumo/internal/version.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -o qumo .
+```
+
+### Tests
 
 ```bash
 # Run tests
@@ -636,19 +424,6 @@ go tool cover -html=coverage.out
 ```
 
 ## Deployment
-
-### Docker (Coming Soon)
-
-```bash
-# Build image
-docker build -t qumo .
-
-# Run relay
-docker run -p 4433:4433/udp -p 8080:8080 \
-  -v $(pwd)/config.relay.yaml:/config.yaml \
-  -v $(pwd)/certs:/certs \
-  qumo relay -config /config.yaml
-```
 
 ### Systemd Service
 
@@ -686,5 +461,3 @@ See [deploy/README.md](deploy/README.md) for Kubernetes deployment manifests.
 
 - **TLS errors**: Regenerate certificates (see Quick Start)
 - **Port in use**: Check with `lsof -i :4433` or `netstat -ano`
-
-```
