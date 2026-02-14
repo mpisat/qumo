@@ -52,7 +52,7 @@ Run `mage help` or `mage -l` to see all available targets.
 ### 🐳 Docker
 - `mage docker:pull` - Pull pre-built image from GHCR
 - `mage docker:build` - Build Docker image
-- `mage docker:up` - Start services with docker-compose
+- `mage docker:up` - Start services with docker compose
 - `mage docker:down` - Stop services
 - `mage docker:logs` - View service logs
 - `mage docker:ps` - List running containers

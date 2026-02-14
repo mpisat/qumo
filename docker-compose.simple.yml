@@ -1,6 +1,6 @@
 # Simple Docker Compose - Complete Demo Environment
 #
-# Usage: docker-compose -f docker-compose.simple.yml up
+# Usage: docker compose -f docker compose.simple.yml up
 #
 # This demo creates a complete MoQT network:
 #   - 1 SDN Controller (manages topology)
@@ -180,7 +180,7 @@ volumes:
 # How it works:
 #
 # 1. Start everything (network topology auto-configured):
-#    docker-compose -f docker-compose.simple.yml up
+#    docker compose -f docker compose.simple.yml up
 #
 #    The 'setup' service automatically configures the network topology.
 #    Watch the logs to see the setup progress!
@@ -198,9 +198,9 @@ volumes:
 #    curl http://localhost:8082/health  # New York
 #
 # 3. View logs:
-#    docker-compose -f docker-compose.simple.yml logs -f
+#    docker compose -f docker compose.simple.yml logs -f
 #
 # 4. Stop demo:
-#    docker-compose -f docker-compose.simple.yml down
+#    docker compose -f docker compose.simple.yml down
 #
 # No shell scripts required! Works the same on all platforms.

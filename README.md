@@ -24,7 +24,7 @@ Experience a complete MoQT network with 1 SDN controller and 3 relay servers:
 
 ```bash
 # Start demo environment (network auto-configured)
-docker-compose -f docker-compose.simple.yml up
+docker compose -f docker compose.simple.yml up
 
 # The setup happens automatically - watch the logs!
 # Once you see "✅ Demo network configured!", try:
@@ -36,7 +36,7 @@ curl http://localhost:8090/graph | jq
 curl "http://localhost:8090/route?from=relay-tokyo&to=relay-newyork"
 
 # Stop demo (in another terminal)
-docker-compose -f docker-compose.simple.yml down
+docker compose -f docker compose.simple.yml down
 ```
 
 **Network Topology (auto-configured):**
@@ -58,7 +58,7 @@ Get started in 3 steps without cloning the repository:
 
 **Option 1: Super Simple (PostgreSQL-style)**
 
-Just add to your docker-compose.yml - no config files or certificates needed:
+Just add to your docker compose.yml - no config files or certificates needed:
 
 ```yaml
 services:
@@ -71,7 +71,7 @@ services:
       - INSECURE=true  # Auto-generates self-signed certs
 
   # Or use the provided simple compose file:
-  # docker-compose -f docker-compose.simple.yml up -d
+  # docker compose -f docker compose.simple.yml up -d
 ```
 
 That's it! Visit:
@@ -85,7 +85,7 @@ That's it! Visit:
 mkdir qumo && cd qumo
 curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.relay.yaml
 curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.sdn.yaml
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker-compose.external.yml
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker compose.external.yml
 
 # 2. Generate TLS certificates
 mkdir -p certs
@@ -93,7 +93,7 @@ mkcert -install
 mkcert -cert-file certs/server.crt -key-file certs/server.key localhost 127.0.0.1 ::1
 
 # 3. Start services
-docker-compose -f docker-compose.external.yml up -d
+docker compose -f docker compose.external.yml up -d
 
 # Verify
 curl http://localhost:8090/graph  # SDN Controller
@@ -195,7 +195,7 @@ Pull and run the latest release without building:
 
 ```bash
 # Option 1: Download external compose file
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker-compose.external.yml
+curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker compose.external.yml
 
 # Generate certificates (if not already done)
 mkdir -p certs
@@ -207,10 +207,10 @@ curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.relay.yaml
 curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.sdn.yaml
 
 # Start services
-docker-compose -f docker-compose.external.yml up -d
+docker compose -f docker compose.external.yml up -d
 
-# Option 2: Create docker-compose.yml inline
-cat > docker-compose.yml <<EOF
+# Option 2: Create docker compose.yml inline
+cat > docker compose.yml <<EOF
 version: '3.8'
 
 services:
@@ -241,7 +241,7 @@ services:
 EOF
 
 # Start services
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Development Setup (Build from Source)
@@ -260,7 +260,7 @@ For contributors or when modifying the code:
    # Windows: winget install FiloSottile.mkcert
    # macOS: brew install mkcert
    # Linux: See https://github.com/FiloSottile/mkcert#installation
-   
+
    # Generate certificates
    mkdir -p certs
    mkcert -install
@@ -270,14 +270,14 @@ For contributors or when modifying the code:
 
 2. **Start all services**:
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. **Verify services**:
    ```bash
    # SDN Controller
    curl http://localhost:8090/graph
-   
+
    # Relay Health Check
    curl http://localhost:8080/health
    ```
@@ -285,16 +285,16 @@ For contributors or when modifying the code:
 4. **View logs**:
    ```bash
    # All services
-   docker-compose logs -f
-   
+   docker compose logs -f
+
    # Specific service
-   docker-compose logs -f relay
-   docker-compose logs -f sdn
+   docker compose logs -f relay
+   docker compose logs -f sdn
    ```
 
 5. **Stop services**:
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
 ### Run Containers Manually
@@ -396,7 +396,7 @@ See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml
 
 ### As a Microservice (PostgreSQL-style)
 
-Add qumo to your existing docker-compose.yml - just like adding a database:
+Add qumo to your existing docker compose.yml - just like adding a database:
 
 ```yaml
 services:
@@ -407,13 +407,13 @@ services:
       POSTGRES_PASSWORD: example
     ports:
       - "5432:5432"
-  
+
   app:
     image: your-app:latest
     depends_on:
       - db
       - qumo-relay
-  
+
   # Add qumo - no config files needed!
   qumo-relay:
     image: ghcr.io/okdaichi/qumo:latest
@@ -616,7 +616,7 @@ graph LR
     Subscriber["Subscriber<br/>(Browser)"]
     SDN["SDN Controller<br/>(qumo)"]
     Routing["Dijkstra<br/>Routing"]
-    
+
     Publisher -->|QUIC/MoQ| Relay
     Relay -->|QUIC/MoQ| Subscriber
     Relay -->|register/heartbeat| SDN

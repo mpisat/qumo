@@ -1,10 +1,10 @@
 # Docker Compose for External Users
-# 
+#
 # This compose file uses pre-built images from GitHub Container Registry.
 # No local build required - ideal for quickly testing or deploying qumo.
 #
 # Usage:
-#   docker-compose -f docker-compose.external.yml up -d
+#   docker compose -f docker compose.external.yml up -d
 #
 # Prerequisites:
 #   1. Create config files (or use the defaults in the repo)
