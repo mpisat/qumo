@@ -58,7 +58,7 @@ func RunSDN(args []string) error {
 	mux := http.NewServeMux()
 
 	// Topology + Relay registration routes
-	mux.HandleFunc("/node/", topology.NewNodeHandlerFunc(topo))
+	mux.HandleFunc("/relay/", topology.NewNodeHandlerFunc(topo))
 	mux.HandleFunc("/route", topology.RouteHandlerFunc(topo))
 	mux.HandleFunc("/graph", topology.GraphHandlerFunc(topo))
 	mux.HandleFunc("/graph/matrix", topology.GraphMatrixHandlerFunc(topo))

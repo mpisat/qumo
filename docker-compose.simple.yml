@@ -136,41 +136,24 @@ services:
         condition: service_healthy
     networks:
       - qumo-net
-    command: >
-      sh -c "
-        echo '🚀 Setting up qumo demo network...' &&
-        echo '📡 Registering relay topology...' &&
-        
-        curl -X PUT http://sdn:8090/relay/relay-tokyo \
-          -H 'Content-Type: application/json' \
-          -d '{\"neighbors\": [{\"name\": \"relay-london\", \"latency_ms\": 250}]}' \
-          -s -o /dev/null -w 'Tokyo registered (HTTP %{http_code})\n' &&
-        
-        curl -X PUT http://sdn:8090/relay/relay-london \
-          -H 'Content-Type: application/json' \
-          -d '{\"neighbors\": [{\"name\": \"relay-tokyo\", \"latency_ms\": 250}, {\"name\": \"relay-newyork\", \"latency_ms\": 80}]}' \
-          -s -o /dev/null -w 'London registered (HTTP %{http_code})\n' &&
-        
-        curl -X PUT http://sdn:8090/relay/relay-newyork \
-          -H 'Content-Type: application/json' \
-          -d '{\"neighbors\": [{\"name\": \"relay-london\", \"latency_ms\": 80}]}' \
-          -s -o /dev/null -w 'New York registered (HTTP %{http_code})\n' &&
-        
-        echo '' &&
-        echo '✅ Demo network configured!' &&
-        echo '' &&
-        echo '📊 Network Topology:' &&
-        echo '   relay-tokyo (Asia) <--250ms--> relay-london (Europe) <--80ms--> relay-newyork (Americas)' &&
-        echo '' &&
-        echo '🎯 Access URLs:' &&
-        echo '  - SDN Dashboard:   http://localhost:8090' &&
-        echo '  - Relay Tokyo:     https://localhost:4433 (metrics: :8080)' &&
-        echo '  - Relay London:    https://localhost:4434 (metrics: :8081)' &&
-        echo '  - Relay New York:  https://localhost:4435 (metrics: :8082)' &&
-        echo '' &&
-        echo '🔍 Try: curl http://localhost:8090/graph' &&
-        echo '🔍 Try: curl \"http://localhost:8090/route?from=relay-tokyo&to=relay-newyork\"'
-      "
+    command:
+      - sh
+      - -c
+      - |
+        echo '🚀 Setting up qumo demo network...'
+        echo '📡 Registering relay topology...'
+        curl -s -X PUT http://sdn:8090/relay/relay-tokyo -H 'Content-Type: application/json' -d '{"region":"asia","neighbors":{"relay-london":250}}' -o /dev/null -w 'Tokyo registered (HTTP %{http_code})\n'
+        curl -s -X PUT http://sdn:8090/relay/relay-london -H 'Content-Type: application/json' -d '{"region":"europe","neighbors":{"relay-tokyo":250,"relay-newyork":80}}' -o /dev/null -w 'London registered (HTTP %{http_code})\n'
+        curl -s -X PUT http://sdn:8090/relay/relay-newyork -H 'Content-Type: application/json' -d '{"region":"americas","neighbors":{"relay-london":80}}' -o /dev/null -w 'New York registered (HTTP %{http_code})\n'
+        echo ''
+        echo '✅ Demo network configured!'
+        echo ''
+        echo '📊 Network Topology:'
+        echo '   relay-tokyo (Asia) <--250ms--> relay-london (Europe) <--80ms--> relay-newyork (Americas)'
+        echo ''
+        echo '🎯 Try these commands:'
+        echo '   curl http://localhost:8090/graph | jq'
+        echo '   curl "http://localhost:8090/route?from=relay-tokyo&to=relay-newyork"'
     restart: "no"
 
 networks:
