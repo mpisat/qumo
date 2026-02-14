@@ -8,7 +8,6 @@ server:
   address: "${RELAY_ADDR:-0.0.0.0:4433}"
   cert_file: "${CERT_FILE:-certs/server.crt}"
   key_file: "${KEY_FILE:-certs/server.key}"
-  health_check_addr: "${HEALTH_ADDR:-:8080}"
 
 relay:
   group_cache_size: ${GROUP_CACHE_SIZE:-100}
