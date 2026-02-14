@@ -68,6 +68,12 @@ func Help() error {
 	fmt.Println("    mage docker:logs  - View service logs")
 	fmt.Println("    mage docker:ps    - List running containers")
 	fmt.Println()
+	fmt.Println("  🎮 Demo:")
+	fmt.Println("    mage demo:up      - Start demo environment (3 relays + SDN)")
+	fmt.Println("    mage demo:setup   - Configure demo network topology")
+	fmt.Println("    mage demo:down    - Stop demo environment")
+	fmt.Println("    mage demo:status  - Check demo status")
+	fmt.Println()
 	fmt.Println("  �🔧 Utilities:")
 	fmt.Println("    mage cert         - Generate TLS certificates using mkcert")
 	fmt.Println("    mage hash         - Compute/write TLS cert SHA-256")
@@ -626,4 +632,54 @@ func (Docker) Restart() error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// Demo provides demo environment commands
+type Demo mg.Namespace
+
+// Up starts the demo environment with 3 relays and SDN
+func (Demo) Up() error {
+	fmt.Println("🎮 Starting demo environment...")
+	fmt.Println("   1 SDN Controller + 3 Relay Servers")
+	fmt.Println("   (Tokyo, London, New York)")
+	fmt.Println()
+	fmt.Println("   Network topology will be auto-configured!")
+	fmt.Println()
+
+	cmd := exec.Command("docker-compose", "-f", "docker-compose.simple.yml", "up")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// Down stops the demo environment
+func (Demo) Down() error {
+	fmt.Println("🛑 Stopping demo environment...")
+
+	cmd := exec.Command("docker-compose", "-f", "docker-compose.simple.yml", "down")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// Status shows the status of demo services
+func (Demo) Status() error {
+	fmt.Println("📊 Demo Environment Status:")
+	fmt.Println()
+
+	cmd := exec.Command("docker-compose", "-f", "docker-compose.simple.yml", "ps")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("💡 Try these commands:")
+	fmt.Println("   curl http://localhost:8090/graph | jq")
+	fmt.Println("   curl \"http://localhost:8090/route?from=relay-tokyo&to=relay-newyork\"")
+	fmt.Println("   curl http://localhost:8080/health  # Tokyo")
+	fmt.Println("   curl http://localhost:8081/health  # London")
+	fmt.Println("   curl http://localhost:8082/health  # New York")
+	return nil
 }

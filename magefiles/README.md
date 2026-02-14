@@ -49,14 +49,22 @@ Run `mage help` or `mage -l` to see all available targets.
 - `mage webBuild` - Build for production
 - `mage webClean` - Clean build artifacts
 
-### � Docker- `mage docker:pull` - Pull pre-built image from GHCR- `mage docker:build` - Build Docker image
+### 🐳 Docker
+- `mage docker:pull` - Pull pre-built image from GHCR
+- `mage docker:build` - Build Docker image
 - `mage docker:up` - Start services with docker-compose
 - `mage docker:down` - Stop services
 - `mage docker:logs` - View service logs
 - `mage docker:ps` - List running containers
 - `mage docker:restart` - Restart services
 
-### �🔧 Utilities
+### 🎮 Demo
+- `mage demo:up` - Start demo environment (3 relays + SDN)
+- `mage demo:setup` - Configure demo network topology
+- `mage demo:down` - Stop demo environment
+- `mage demo:status` - Check demo status
+
+### 🔧 Utilities
 - `mage cert` - Generate TLS certificates
 - `mage hash` - Compute cert hash
 

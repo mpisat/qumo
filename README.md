@@ -18,6 +18,40 @@
 
 ## Quick Start
 
+### Demo Environment (Try it Now!)
+
+Experience a complete MoQT network with 1 SDN controller and 3 relay servers:
+
+```bash
+# Start demo environment (network auto-configured)
+docker-compose -f docker-compose.simple.yml up
+
+# The setup happens automatically - watch the logs!
+# Once you see "✅ Demo network configured!", try:
+
+# View network topology
+curl http://localhost:8090/graph | jq
+
+# Find optimal route from Tokyo to New York
+curl "http://localhost:8090/route?from=relay-tokyo&to=relay-newyork"
+
+# Stop demo (in another terminal)
+docker-compose -f docker-compose.simple.yml down
+```
+
+**Network Topology (auto-configured):**
+```
+relay-tokyo (Asia) <--250ms--> relay-london (Europe) <--80ms--> relay-newyork (Americas)
+```
+
+**Access Points:**
+- SDN Controller: http://localhost:8090
+- Relay Tokyo: https://localhost:4433 (health: http://localhost:8080)
+- Relay London: https://localhost:4434 (health: http://localhost:8081)
+- Relay New York: https://localhost:4435 (health: http://localhost:8082)
+
+**No shell scripts or manual setup required!** Everything runs in Docker and works the same on Windows, macOS, and Linux.
+
 ### For External Users (Easiest)
 
 Get started in 3 steps without cloning the repository:
