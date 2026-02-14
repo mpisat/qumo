@@ -63,7 +63,7 @@ func Help() error {
 	fmt.Println("  � Docker:")
 	fmt.Println("    mage docker:pull    - Pull pre-built image from GHCR")
 	fmt.Println("    mage docker:build   - Build Docker image")
-	fmt.Println("    mage docker:up      - Start services with docker-compose")
+	fmt.Println("    mage docker:up      - Start services with docker compose")
 	fmt.Println("    mage docker:down  - Stop services")
 	fmt.Println("    mage docker:logs  - View service logs")
 	fmt.Println("    mage docker:ps    - List running containers")
@@ -574,11 +574,11 @@ func (Docker) Build() error {
 	return nil
 }
 
-// Up starts all services with docker-compose
+// Up starts all services with docker compose
 func (Docker) Up() error {
-	fmt.Println("🚀 Starting services with docker-compose...")
+	fmt.Println("🚀 Starting services with docker compose...")
 
-	cmd := exec.Command("docker-compose", "up", "-d")
+	cmd := exec.Command("docker", "compose", "up", "-d")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -598,7 +598,7 @@ func (Docker) Up() error {
 func (Docker) Down() error {
 	fmt.Println("🛑 Stopping services...")
 
-	cmd := exec.Command("docker-compose", "down")
+	cmd := exec.Command("docker", "compose", "down")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -608,7 +608,7 @@ func (Docker) Down() error {
 func (Docker) Logs() error {
 	fmt.Println("📋 Service Logs:")
 
-	cmd := exec.Command("docker-compose", "logs", "-f")
+	cmd := exec.Command("docker", "compose", "logs", "-f")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -618,7 +618,7 @@ func (Docker) Logs() error {
 func (Docker) Ps() error {
 	fmt.Println("📦 Running Containers:")
 
-	cmd := exec.Command("docker-compose", "ps")
+	cmd := exec.Command("docker", "compose", "ps")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -628,7 +628,7 @@ func (Docker) Ps() error {
 func (Docker) Restart() error {
 	fmt.Println("🔄 Restarting services...")
 
-	cmd := exec.Command("docker-compose", "restart")
+	cmd := exec.Command("docker", "compose", "restart")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -646,7 +646,7 @@ func (Demo) Up() error {
 	fmt.Println("   Network topology will be auto-configured!")
 	fmt.Println()
 
-	cmd := exec.Command("docker-compose", "-f", "docker-compose.simple.yml", "up")
+	cmd := exec.Command("docker", "compose", "-f", "docker-compose.simple.yml", "up")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -656,7 +656,7 @@ func (Demo) Up() error {
 func (Demo) Down() error {
 	fmt.Println("🛑 Stopping demo environment...")
 
-	cmd := exec.Command("docker-compose", "-f", "docker-compose.simple.yml", "down")
+	cmd := exec.Command("docker", "compose", "-f", "docker-compose.simple.yml", "down")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -667,7 +667,7 @@ func (Demo) Status() error {
 	fmt.Println("📊 Demo Environment Status:")
 	fmt.Println()
 
-	cmd := exec.Command("docker-compose", "-f", "docker-compose.simple.yml", "ps")
+	cmd := exec.Command("docker", "compose", "-f", "docker-compose.simple.yml", "ps")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
