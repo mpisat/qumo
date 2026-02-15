@@ -64,6 +64,7 @@ func Help() error {
 	fmt.Println("  🧪 Development:")
 	fmt.Println("    mage test         - Run all tests")
 	fmt.Println("    mage testVerbose  - Run tests with verbose output")
+	fmt.Println("    mage coverage     - Run tests and write coverage.out")
 	fmt.Println("    mage fmt          - Format code with go fmt")
 	fmt.Println("    mage vet          - Run go vet for static analysis")
 	fmt.Println("    mage lint         - Run golangci-lint (if installed)")
@@ -175,6 +176,22 @@ func TestVerbose() error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// Coverage runs tests and writes coverage report to coverage.out
+func Coverage() error {
+	fmt.Println("📊 Running tests with coverage...")
+
+	cmd := exec.Command("go", "test", "-coverprofile=coverage.out", "./...")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	fmt.Println("✅ coverage report written to coverage.out")
+	fmt.Println("Run 'go tool cover -html=coverage.out' to view the report locally")
+	return nil
 }
 
 // Fmt formats all Go code

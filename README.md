@@ -185,7 +185,17 @@ graph TD
 
 ## Development
 
-**Requirements:** Go 1.26+, Node.js 18+ (for web demo)
+### Requirements
+
+- **Go 1.26+** — [Download](https://golang.org/dl/) or use your package manager
+- **Deno** (optional, for web demo) — [Download](https://deno.land/) — see [solid-deno/README.md](solid-deno/README.md) for setup
+- **Mage** — Build automation tool
+  ```bash
+  go install github.com/magefile/mage@latest
+  ```
+  Then run `mage help` to see all available tasks.
+
+For complete Mage documentation and all available targets, see [magefiles/README.md](magefiles/README.md).
 
 ### Project Structure
 
@@ -214,7 +224,7 @@ qumo/
 │   ├── prometheus.yaml
 │   └── grafana/
 │
-├── solid-deno/                 # Web demo client (SolidJS + WebTransport)
+├── solid-deno/                 # Web demo client (SolidJS + Deno) — see solid-deno/README.md
 │
 ├── certs/                      # TLS certificate examples
 ├── configs/                    # Configuration templates
@@ -231,39 +241,18 @@ qumo/
 
 ### Build System (Mage)
 
-qumo uses [Mage](https://magefile.org/) for build automation. All tasks embed version info via `-ldflags`.
+Quick usage (see [magefiles/README.md](magefiles/README.md) for complete reference).
+
+- **Mage repository:** https://github.com/magefile/mage — official site: https://magefile.org/
 
 ```bash
-# Install mage (first time)
-go install github.com/magefile/mage@latest
-
-# Show all available targets
-mage help
-
-# Build & Install
-mage build         # Build binary to bin/qumo (with version ldflags)
-mage install       # Install to $GOPATH/bin
-
-# Test & Lint
-mage test          # Run all tests
-mage testVerbose   # Run tests with verbose output
-mage check         # Run fmt + vet + test
-
-# Docker
-mage docker:build  # Build Docker image with version tags
-mage docker:up     # Start services with docker compose
-mage docker:down   # Stop services
-mage docker:logs   # View service logs
-
-# Demo (3-relay + SDN)
-mage demo:up       # Start demo environment
-mage demo:down     # Stop demo environment
-mage demo:status   # Check demo status
-
-# Runtime
-mage relay         # Start relay server
-mage sdn           # Start SDN controller
-mage dev           # Start relay + SDN in dev mode
+mage build         # Build binary to bin/qumo
+mage test          # Run tests
+mage check         # Format, vet, and test
+mage docker:build  # Build Docker image
+mage demo:up       # Start 3-relay + SDN demo
+mage relay         # Run relay server
+mage sdn           # Run SDN controller
 ```
 
 ### Building with Version Info
@@ -285,14 +274,19 @@ go build -ldflags "-s -w \
 
 ### Tests
 
-```bash
-# Run tests
-go test ./...
+Use Mage wrappers for consistent commands:
 
-# Coverage
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
+```bash
+# Run all tests
+mage test
+
+# Run tests + generate coverage report (coverage.out)
+mage coverage
+# View the report:
+# go tool cover -html=coverage.out
 ```
+
+Coverage report files (e.g. `coverage.out`) are ignored by `.gitignore`.
 
 ## Deployment
 

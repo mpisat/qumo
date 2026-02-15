@@ -34,6 +34,7 @@ Run `mage help` or `mage -l` to see all available targets.
 ### 🧪 Development
 - `mage test` - Run all tests
 - `mage testVerbose` - Run tests with verbose output
+- `mage coverage` - Run tests and write `coverage.out`
 - `mage fmt` - Format code
 - `mage vet` - Run static analysis
 - `mage lint` - Run golangci-lint
