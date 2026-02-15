@@ -211,41 +211,7 @@ curl http://localhost:8090/route?from=relay-a&to=relay-b
 curl http://localhost:8090/announce/lookup?track=camera/video
 ```
 
-## Configuration
-
-### Environment Variables
-
-Override configuration via environment variables (Docker only):
-
-**Relay Server:**
-- `INSECURE=true` - Auto-generate self-signed certificates (development only)
-- `RELAY_ADDR` - Bind address (default: `0.0.0.0:4433`)
-- `CERT_FILE` / `KEY_FILE` - TLS certificate paths
-- `GROUP_CACHE_SIZE` - Group cache size (default: `100`)
-- `FRAME_CAPACITY` - Frame buffer size (default: `1500`)
-- `SDN_URL` - SDN controller URL (optional)
-- `RELAY_NAME` - Relay identifier (optional)
-- `HEARTBEAT_INTERVAL` - Heartbeat interval in seconds (default: `30`)
-- `NEIGHBORS` - Comma-separated neighbor list, e.g. `relay-london:250,relay-newyork:80`
-- `REGION` - Region tag, e.g. `asia`
-- `RELAY_MOQT_ADDR` - MoQT endpoint for next-hop routing (default: `https://<RELAY_NAME>:4433`)
-
-**SDN Controller:**
-- `SDN_ADDR` - Bind address (default: `:8090`)
-- `DATA_DIR` - Data directory (default: `./data`)
-- `PEER_URL` - HA peer URL (optional)
-- `SYNC_INTERVAL` - Sync interval in seconds (default: `10`)
-- `NODE_TTL_SEC` - Node TTL in seconds; `0` = never expire (default: `90`)
-
-See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml) for all YAML options.
-
-### Ports
-
-| Service | Port | Protocol | Description |
-|---------|------|----------|-------------|
-| Relay   | 4433 | UDP/TCP  | MoQT (QUIC) and HTTP health/metrics (server serves UDP for QUIC and TCP for HTTP on the same port) |
-| Demo    | 8080 | TCP      | Host → container mapping in `docker/docker-compose.simple.yml` (host 8080/8081/8082 → container 4433) |
-| SDN     | 8090 | TCP      | HTTP API |
+See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml) for all configuration options. For Docker-based environment variables and setup, see [docker/README.md](docker/README.md).
 
 ## Architecture
 
