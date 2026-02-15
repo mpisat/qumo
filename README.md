@@ -189,17 +189,45 @@ graph TD
 
 ### Project Structure
 
-Key directories:
-
-- `docker/` — Docker artifacts (Dockerfile, compose files, Docker-specific docs) — see `docker/README.md`
-- `internal/relay/` — Relay server implementation (handlers, sessions, caching)
-- `internal/sdn/` — SDN controller and client (topology management, announce table)
-- `internal/cli/` — CLI entrypoints and config loading
-- `magefiles/` — Build automation (Mage tasks) — see `magefiles/README.md`
-- `deploy/` — Observability stack (Prometheus, Grafana, OpenTelemetry) — see `deploy/README.md`
-- `solid-deno/` — Web demo client (SolidJS + WebTransport) — see `solid-deno/README.md`
-- `certs/`, `configs/` — Certificate and configuration examples
-- `benchmarks/`, `examples/` — Performance tests and usage examples
+```
+qumo/
+├── docker/                     # Docker artifacts & docs
+│   ├── Dockerfile              # Multi-stage container build
+│   ├── docker-entrypoint.sh    # Auto-config from env vars
+│   ├── docker-compose.yml      # Local build + dev
+│   ├── docker-compose.external.yml  # GHCR-based deployment
+│   ├── docker-compose.simple.yml    # Demo (SDN + 3 relays)
+│   └── README.md               # Docker usage guide
+│
+├── internal/                   # Core implementation
+│   ├── cli/                    # CLI entrypoints & config loading
+│   ├── relay/                  # Relay server (handlers, sessions, caching)
+│   ├── sdn/                    # SDN controller & client (topology, announce table)
+│   ├── rtmp/                   # RTMP utilities
+│   ├── topology/               # Dijkstra routing & graph management
+│   └── version/                # Version info
+│
+├── magefiles/                  # Build automation (Mage tasks)
+│
+├── deploy/                     # Observability stack
+│   ├── otel-collector-config.yaml
+│   ├── prometheus.yaml
+│   └── grafana/
+│
+├── solid-deno/                 # Web demo client (SolidJS + WebTransport)
+│
+├── certs/                      # TLS certificate examples
+├── configs/                    # Configuration templates
+├── benchmarks/                 # Performance benchmarks
+├── examples/                   # Usage examples
+├── docs/                       # Additional documentation
+│
+├── config.relay.yaml           # Relay configuration template
+├── config.sdn.yaml             # SDN configuration template
+├── .github/workflows/          # CI/CD pipelines
+├── go.mod & go.sum             # Go dependencies
+└── main.go                     # Entry point
+```
 
 ### Build System (Mage)
 
