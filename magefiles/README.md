@@ -51,15 +51,17 @@ Run `mage help` or `mage -l` to see all available targets.
 
 ### 🐳 Docker
 - `mage docker:pull` - Pull pre-built image from GHCR
-- `mage docker:build` - Build Docker image
+- `mage docker:build` - Build Docker image (uses `docker/Dockerfile`)
 - `mage docker:up` - Start services with docker compose
 - `mage docker:down` - Stop services
 - `mage docker:logs` - View service logs
 - `mage docker:ps` - List running containers
 - `mage docker:restart` - Restart services
 
+> **Note:** Docker files (Dockerfile, compose manifests, etc.) are located in the `docker/` directory. See `docker/README.md` for manual Docker usage and examples.
+
 ### 🎮 Demo
-- `mage demo:up` - Start demo environment (3 relays + SDN)
+- `mage demo:up` - Start demo environment (3 relays + SDN) — uses `docker/docker-compose.simple.yml`
 - `mage demo:setup` - Configure demo network topology
 - `mage demo:down` - Stop demo environment
 - `mage demo:status` - Check demo status

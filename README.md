@@ -25,7 +25,6 @@
 A complete Docker-based demo (SDN + 3 relays) and all Docker-related examples have been consolidated under `docker/`. See `docker/README.md` for quick start, compose files, and GHCR usage.
 
 ### For Developers
-### For Developers
 
 See [Installation](#installation) and [Development](#development) sections below.
 
@@ -53,12 +52,11 @@ chmod +x qumo
 
 #### Option 3: Docker (No Build Required)
 
+See `docker/README.md` for comprehensive Docker usage, compose examples, and deployment options. Quick example:
+
 ```bash
 # Pull pre-built image from GitHub Container Registry
 docker pull ghcr.io/okdaichi/qumo:latest
-
-# Or use Docker Hub
-docker pull okdaichi/qumo:latest
 
 # Run relay
 docker run -d \
