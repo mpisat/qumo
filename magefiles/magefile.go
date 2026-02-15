@@ -687,7 +687,7 @@ func (Demo) Up() error {
 	fmt.Println("   Network topology will be auto-configured!")
 	fmt.Println()
 
-	cmd := exec.Command("docker", "compose", "-f", "docker-compose.simple.yml", "up")
+	cmd := exec.Command("docker", "compose", "-f", "docker/docker-compose.simple.yml", "up")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -697,7 +697,7 @@ func (Demo) Up() error {
 func (Demo) Down() error {
 	fmt.Println("🛑 Stopping demo environment...")
 
-	cmd := exec.Command("docker", "compose", "-f", "docker-compose.simple.yml", "down")
+	cmd := exec.Command("docker", "compose", "-f", "docker/docker-compose.simple.yml", "down")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -708,7 +708,7 @@ func (Demo) Status() error {
 	fmt.Println("📊 Demo Environment Status:")
 	fmt.Println()
 
-	cmd := exec.Command("docker", "compose", "-f", "docker-compose.simple.yml", "ps")
+	cmd := exec.Command("docker", "compose", "-f", "docker/docker-compose.simple.yml", "ps")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

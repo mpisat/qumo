@@ -16,95 +16,15 @@
 - 🔒 **TLS Security**: Built-in TLS 1.3 support for encrypted connections
 - 💾 **Persistent Topology**: Optional disk-based topology storage
 - 🌐 **HA Support**: Peer synchronization for high-availability deployments
-- 🐳 **Docker-First**: PostgreSQL-style zero-config with env vars; multi-arch images
+- 🐳 **Docker-Support**: Env-var zero-config; prebuilt multi-arch images on GHCR (ghcr.io/okdaichi/qumo)
 
 ## Quick Start
 
-### Demo Environment (Try it Now!)
+### Demo Environment (short)
 
-Experience a complete MoQT network with 1 SDN controller and 3 relay servers:
+A complete Docker-based demo (SDN + 3 relays) and all Docker-related examples have been consolidated under `docker/`. See `docker/README.md` for quick start, compose files, and GHCR usage.
 
-```bash
-# Start demo environment
-docker compose -f docker-compose.simple.yml up
-
-# Each relay self-registers its topology via heartbeat — no setup service needed.
-# After ~30 seconds, the SDN graph builds itself:
-
-# View network topology
-curl http://localhost:8090/graph | jq
-
-# Find optimal route from Tokyo to New York
-curl "http://localhost:8090/route?from=relay-tokyo&to=relay-newyork"
-
-# Check version
-docker exec qumo-relay-tokyo /app/qumo version
-
-# Stop demo
-docker compose -f docker-compose.simple.yml down
-```
-
-**Network Topology (auto-configured):**
-```
-relay-tokyo (Asia) <--250ms--> relay-london (Europe) <--80ms--> relay-newyork (Americas)
-```
-
-**Access Points:**
-- SDN Controller: http://localhost:8090
-- Relay Tokyo: https://localhost:4433 (health: http://localhost:8080)
-- Relay London: https://localhost:4434 (health: http://localhost:8081)
-- Relay New York: https://localhost:4435 (health: http://localhost:8082)
-
-**No shell scripts or manual setup required!** Relays self-register their neighbors via topology heartbeat. Everything runs in Docker and works the same on Windows, macOS, and Linux.
-
-### For External Users (Easiest)
-
-Get started in 3 steps without cloning the repository:
-
-**Option 1: Super Simple (PostgreSQL-style)**
-
-Just add to your docker-compose.yml - no config files or certificates needed:
-
-```yaml
-services:
-  qumo-relay:
-    image: ghcr.io/okdaichi/qumo:latest
-    ports:
-      - "4433:4433/udp"
-      - "8080:8080"
-    environment:
-      - INSECURE=true  # Auto-generates self-signed certs
-
-  # Or use the provided simple compose file:
-  # docker compose -f docker-compose.simple.yml up -d
-```
-
-That's it! Visit:
-- Relay health: http://localhost:8080/health
-- Relay metrics: http://localhost:8080/metrics
-
-**Option 2: Full Setup (with real certificates)**
-
-```bash
-# 1. Download config files
-mkdir qumo && cd qumo
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.relay.yaml
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/config.sdn.yaml
-curl -O https://raw.githubusercontent.com/okdaichi/qumo/main/docker-compose.external.yml
-
-# 2. Generate TLS certificates
-mkdir -p certs
-mkcert -install
-mkcert -cert-file certs/server.crt -key-file certs/server.key localhost 127.0.0.1 ::1
-
-# 3. Start services
-docker compose -f docker-compose.external.yml up -d
-
-# Verify
-curl http://localhost:8090/graph  # SDN Controller
-curl http://localhost:8080/health # Relay Server
-```
-
+### For Developers
 ### For Developers
 
 See [Installation](#installation) and [Development](#development) sections below.
@@ -144,7 +64,7 @@ docker pull okdaichi/qumo:latest
 docker run -d \
   --name qumo-relay \
   -p 4433:4433/udp \
-  -p 8080:8080 \
+  -p 8080:4433 \
   -v $(pwd)/certs:/app/certs:ro \
   ghcr.io/okdaichi/qumo:latest relay -config config.relay.yaml
 ```
@@ -191,8 +111,8 @@ qumo relay -config config.relay.yaml
 Edit [config.relay.yaml](config.relay.yaml) with your settings.
 
 **Default Ports:**
-- `0.0.0.0:4433` - QUIC/MoQT (UDP)
-- `:8080` - Health/Metrics (HTTP)
+- `0.0.0.0:4433` - QUIC/MoQT (UDP) and HTTP health/metrics (TCP). The server listens for QUIC (UDP) and HTTP (TCP) on the same address/port.
+- Demo note: `docker/docker-compose.simple.yml` maps host ports `8080`/`8081`/`8082` → container port `4433` so health/metrics are reachable on those host ports for the demo relays.
 
 **Key Features:**
 - Media track distribution
@@ -207,13 +127,13 @@ Edit [config.relay.yaml](config.relay.yaml) with your settings.
 **Examples:**
 ```bash
 # Health check
-curl http://localhost:8080/health
+curl http://localhost:4433/health  # or http://localhost:8080 when using the docker-compose demo
 
 # Readiness probe
-curl http://localhost:8080/health?probe=ready
+curl http://localhost:4433/health?probe=ready  # or http://localhost:8080?probe=ready
 
 # Metrics
-curl http://localhost:8080/metrics
+curl http://localhost:4433/metrics  # or http://localhost:8080 when using the docker-compose demo
 ```
 
 **Web Demo:**
@@ -325,8 +245,8 @@ See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml
 
 | Service | Port | Protocol | Description |
 |---------|------|----------|-------------|
-| Relay   | 4433 | UDP      | MoQT (QUIC) |
-| Relay   | 8080 | TCP      | Health/Metrics |
+| Relay   | 4433 | UDP/TCP  | MoQT (QUIC) and HTTP health/metrics (server serves UDP for QUIC and TCP for HTTP on the same port) |
+| Demo    | 8080 | TCP      | Host → container mapping in `docker/docker-compose.simple.yml` (host 8080/8081/8082 → container 4433) |
 | SDN     | 8090 | TCP      | HTTP API |
 
 ## Architecture
@@ -425,37 +345,8 @@ go tool cover -html=coverage.out
 
 ## Deployment
 
-### Systemd Service
-
-Create `/etc/systemd/system/qumo-relay.service`:
-
-```ini
-[Unit]
-Description=qumo Media Relay Server
-After=network.target
-
-[Service]
-Type=simple
-User=qumo
-ExecStart=/usr/local/bin/qumo relay -config /etc/qumo/config.relay.yaml
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable qumo-relay
-sudo systemctl start qumo-relay
-```
-
-### Kubernetes
-
-See [deploy/README.md](deploy/README.md) for Kubernetes deployment manifests.
+For systemd and Kubernetes deployment examples see `deploy/README.md`.  
+> ⚠️ These examples are provided as *experimental/informational* samples and have not been fully validated by the project maintainers — use at your own risk. PRs to improve them are welcome.
 
 ## Troubleshooting
 
