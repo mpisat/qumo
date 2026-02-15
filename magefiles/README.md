@@ -31,6 +31,18 @@ Run `mage help` or `mage -l` to see all available targets.
 - `mage install` - Install to $GOPATH/bin
 - `mage clean` - Clean build artifacts
 
+Manual build with version info (useful if you don't run `mage`):
+
+```bash
+go build -ldflags "-s -w \
+  -X github.com/okdaichi/qumo/internal/version.version=$(git describe --tags --always) \
+  -X github.com/okdaichi/qumo/internal/version.commit=$(git rev-parse --short HEAD) \
+  -X github.com/okdaichi/qumo/internal/version.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -o qumo .
+```
+
+(Recommended: use `mage build` — it injects the same version metadata automatically.)
+
 ### 🧪 Development
 - `mage test` - Run all tests
 - `mage testVerbose` - Run tests with verbose output

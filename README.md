@@ -257,36 +257,7 @@ mage sdn           # Run SDN controller
 
 ### Building with Version Info
 
-Version metadata is injected at build time via `-ldflags`:
-
-```bash
-# Automatic (via Mage)
-mage build
-./bin/qumo version
-
-# Manual
-go build -ldflags "-s -w \
-  -X github.com/okdaichi/qumo/internal/version.version=$(git describe --tags --always) \
-  -X github.com/okdaichi/qumo/internal/version.commit=$(git rev-parse --short HEAD) \
-  -X github.com/okdaichi/qumo/internal/version.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  -o qumo .
-```
-
-### Tests
-
-Use Mage wrappers for consistent commands:
-
-```bash
-# Run all tests
-mage test
-
-# Run tests + generate coverage report (coverage.out)
-mage coverage
-# View the report:
-# go tool cover -html=coverage.out
-```
-
-Coverage report files (e.g. `coverage.out`) are ignored by `.gitignore`.
+Version metadata is embedded into the binary at build time via `-ldflags`. Use `mage build` (recommended) to produce artifact(s) with version information. For the manual `go build -ldflags` command and examples, see the `Build & Install` section in `magefiles/README.md`.
 
 ## Deployment
 
