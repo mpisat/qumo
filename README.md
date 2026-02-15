@@ -170,10 +170,18 @@ graph LR
 
 ### Topology Lifecycle
 
-1. **Registration** — Each relay sends `PUT /relay/<name>` with `{region, address, neighbors}` on startup
-2. **Heartbeat** — The same PUT is repeated every `heartbeat_interval_sec` (default 30s)
-3. **Routing** — SDN runs Dijkstra on the adjacency-list graph; returns full path, relay uses only next-hop (hop-by-hop forwarding)
-4. **Expiry** — If a relay stops heartbeating, the SDN sweeper removes it after `node_ttl_sec` (default 90s)
+```mermaid
+graph TD
+    A["Relay Startup"] -->|PUT /relay/name<br/>region, address, neighbors| B["SDN Registers Relay<br/>(Adds to Topology Graph)"]
+    B --> C["Heartbeat Loop<br/>(every 30s)"]
+    C -->|PUT /relay/name<br/>Keep-alive| D["SDN Refreshes TTL<br/>(node_ttl_sec = 90s)"]
+    D --> C
+    C -->|Stop/Failure| E["No Heartbeat<br/>for 90s"]
+    E -->|Sweeper Job| F["SDN Removes Relay<br/>(Deletes from Graph)"]
+    F --> G["Relay Offline"]
+    D -->|Route Query| H["Dijkstra<br/>Compute Path"]
+    H -->|Next-hop only| I["Relay Forwards<br/>via SDN Path"]
+```
 
 ## Development
 
