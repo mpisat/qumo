@@ -276,6 +276,20 @@ graph LR
 
 **Requirements:** Go 1.26+, Node.js 18+ (for web demo)
 
+### Project Structure
+
+Key directories:
+
+- `docker/` — Docker artifacts (Dockerfile, compose files, Docker-specific docs) — see `docker/README.md`
+- `internal/relay/` — Relay server implementation (handlers, sessions, caching)
+- `internal/sdn/` — SDN controller and client (topology management, announce table)
+- `internal/cli/` — CLI entrypoints and config loading
+- `magefiles/` — Build automation (Mage tasks) — see `magefiles/README.md`
+- `deploy/` — Observability stack (Prometheus, Grafana, OpenTelemetry) — see `deploy/README.md`
+- `solid-deno/` — Web demo client (SolidJS + WebTransport) — see `solid-deno/README.md`
+- `certs/`, `configs/` — Certificate and configuration examples
+- `benchmarks/`, `examples/` — Performance tests and usage examples
+
 ### Build System (Mage)
 
 qumo uses [Mage](https://magefile.org/) for build automation. All tasks embed version info via `-ldflags`.
