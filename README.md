@@ -78,7 +78,7 @@ mage build        # builds bin/qumo with version info
 
 ## Usage
 
-qumo provides two subcommands for different deployment scenarios.
+qumo provides some subcommands for different deployment scenarios.
 
 ### version
 
@@ -98,7 +98,7 @@ qumo -v
 
 ### relay
 
-Start a media relay server that forwards MoQT streams between publishers and subscribers.
+Start a media relay server that forwards MoQ streams between publishers and subscribers.
 
 **Start Server:**
 ```bash
@@ -108,64 +108,16 @@ qumo relay -config config.relay.yaml
 **Configuration:**
 Edit [config.relay.yaml](config.relay.yaml) with your settings.
 
-**Default Ports:**
-- `0.0.0.0:4433` - QUIC/MoQT (UDP) and HTTP health/metrics (TCP). The server listens for QUIC (UDP) and HTTP (TCP) on the same address/port.
-- Demo note: `docker/docker-compose.simple.yml` maps host ports `8080`/`8081`/`8082` → container port `4433` so health/metrics are reachable on those host ports for the demo relays.
-
 **Key Features:**
-- Media track distribution
-- Group caching for performance
-- Prometheus metrics export
+- Fan-out media track forwarding
+- Prometheus metrics export // WIP
 - Auto-announce to SDN controller (opt-in)
 
 **API Endpoints:**
-- `GET /health?probe={live|ready}` - Health probes
+- `GET /health` - Health probes
+  - `GET /health?probe=ready` - Readiness probe
+  - `GET /health?probe=live` - Liveness probe
 - `GET /metrics` - Prometheus metrics
-
-**Examples:**
-```bash
-# Health check
-curl http://localhost:4433/health  # or http://localhost:8080 when using the docker-compose demo
-
-# Readiness probe
-curl http://localhost:4433/health?probe=ready  # or http://localhost:8080?probe=ready
-
-# Metrics
-curl http://localhost:4433/metrics  # or http://localhost:8080 when using the docker-compose demo
-```
-
-**Web Demo:**
-Test with browser-based webcam/audio streaming client:
-```bash
-cd solid-deno
-npm install && npm run dev
-# Open http://localhost:5173
-```
-See [solid-deno/README.md](solid-deno/README.md) for details.
-
-**Auto-Announce & Topology Registration (optional):**
-
-When `sdn.url` is set in `config.relay.yaml`, the relay automatically registers received announcements with the SDN controller's announce table. Other relays (or clients) can then query the SDN to discover which relay holds which track.
-
-If `neighbors` is configured, the relay also self-registers its topology via `PUT /relay/<name>` heartbeat, so the SDN builds the network graph automatically.
-
-```yaml
-sdn:
-  url: "https://sdn.example.com:8090"
-  relay_name: "relay-tokyo-1"
-  heartbeat_interval_sec: 30
-  address: "https://relay-tokyo-1:4433"   # MoQT endpoint for next-hop routing
-  region: "asia"                           # region tag
-  neighbors:                               # neighbor relays and edge costs
-    relay-london-1: 250
-    relay-newyork-1: 180
-  # tls:
-  #   cert_file: "certs/relay.crt"
-  #   key_file: "certs/relay.key"
-  #   ca_file: "certs/ca.crt"
-```
-
-Entries expire after `node_ttl_sec` on the SDN side (default 90s); the relay heartbeat (default 30s) keeps them alive.
 
 ### sdn
 
@@ -178,9 +130,6 @@ qumo sdn -config config.sdn.yaml
 
 **Configuration:**
 Edit [config.sdn.yaml](config.sdn.yaml) with your settings.
-
-**Default Port:**
-- `:8090` - HTTP API
 
 **Key Features:**
 - Dynamic relay registration with automatic topology discovery
@@ -198,18 +147,6 @@ Edit [config.sdn.yaml](config.sdn.yaml) with your settings.
 - `PUT /announce/<track>` - Announce track
 - `GET /announce/lookup?track=X` - Find relays for track
 - `GET /sync` / `PUT /sync` - HA synchronization
-
-**Examples:**
-```bash
-# Get topology
-curl http://localhost:8090/graph
-
-# Compute route
-curl http://localhost:8090/route?from=relay-a&to=relay-b
-
-# Find tracks
-curl http://localhost:8090/announce/lookup?track=camera/video
-```
 
 See [config.relay.yaml](config.relay.yaml) and [config.sdn.yaml](config.sdn.yaml) for all configuration options. For Docker-based environment variables and setup, see [docker/README.md](docker/README.md).
 
