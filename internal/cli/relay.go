@@ -84,6 +84,15 @@ func RunRelay(args []string) error {
 		go fetcher.Run(ctx)
 	}
 
+	// Register WebTransport handler on http.DefaultServeMux so that the
+	// webtransport-go HTTP/3 layer can route browser CONNECT requests to
+	// the relay's HandleWebTransport method.
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if err := relayServer.HandleWebTransport(w, r); err != nil {
+			slog.Error("failed to handle web transport", "err", err)
+		}
+	})
+
 	mux := http.NewServeMux()
 	mux.Handle("/health", &healthHandler{
 		statusFunc: relayServer.Status,
