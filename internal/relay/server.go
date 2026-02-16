@@ -61,10 +61,11 @@ func (s *Server) ListenAndServe() error {
 	defer cancel()
 
 	s.server = &moqt.Server{
-		Addr:            s.Addr,
-		TLSConfig:       s.TLSConfig,
-		QUICConfig:      s.QUICConfig,
-		CheckHTTPOrigin: s.CheckHTTPOrigin,
+		Addr:                      s.Addr,
+		TLSConfig:                 s.TLSConfig,
+		QUICConfig:                s.QUICConfig,
+		CheckHTTPOrigin:           s.CheckHTTPOrigin,
+		NewWebtransportServerFunc: newFixedWebTransportServer,
 		SetupHandler: moqt.SetupHandlerFunc(func(w moqt.SetupResponseWriter, r *moqt.SetupRequest) {
 			downstream, err := moqt.Accept(w, r, s.TrackMux)
 			if err != nil {

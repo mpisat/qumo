@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/okdaichi/gomoqt/moqt"
+	"github.com/okdaichi/gomoqt/quic"
 	"github.com/okdaichi/qumo/internal/relay"
 	"github.com/okdaichi/qumo/internal/sdn"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -57,8 +58,12 @@ func RunRelay(args []string) error {
 	relayServer := &relay.Server{
 		Addr:      config.Address,
 		TLSConfig: tlsConfig,
-		Config:    &config.RelayConfig,
-		TrackMux:  trackMux,
+		QUICConfig: &quic.Config{
+			EnableDatagrams:                  true,
+			EnableStreamResetPartialDelivery: true,
+		},
+		Config:   &config.RelayConfig,
+		TrackMux: trackMux,
 		CheckHTTPOrigin: func(r *http.Request) bool {
 			return true //TODO:
 		},
